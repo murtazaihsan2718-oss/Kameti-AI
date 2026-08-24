@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Kameti AI - Committee Manager</title>
+  
+  <!-- Web App Manifest & Theme -->
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#FFFFFF" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Kameti AI" />
+  
+  <!-- CSS Stylesheet -->
+  <link rel="stylesheet" href="/css/styles.css?v=10.0.0" />
+</head>
+<body>
+
+  <!-- Responsive Container Frame -->
+  <div class="app-container-frame">
+    <div class="mobile-app-shell" id="app-shell">
+
+      <!-- Toast Notification Bar -->
+      <div id="toast-notification" class="toast-notification"></div>
+
+      <!-- Main Scrollable App Viewport -->
+      <main class="app-content-viewport" id="app-viewport">
+        <!-- Rendered view injected dynamically here -->
+      </main>
+
+      <!-- Floating Dock Navigation Bar matching Reference Designs -->
+      <nav class="bottom-nav-dock" id="app-bottom-nav">
+        <button class="dock-nav-item active" data-view="home">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M3 11h8V3H3v8zm10-8v8h8V3h-8zm-10 18h8v-8H3v8zm10 0h8v-8h-8v8z"></path></svg>
+          <span>Home</span>
+        </button>
+
+        <button class="dock-nav-item" data-view="voice">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+          <span>Voice</span>
+        </button>
+
+        <button class="dock-nav-item" data-view="notifications">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          <span>Activity</span>
+        </button>
+      </nav>
+
+      <!-- Shared Modal Overlay -->
+      <div id="modal-overlay" class="modal-overlay">
+        <div id="modal-sheet-content" class="modal-card-popup">
+          <!-- Dynamically populated by modals -->
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Service Worker Registration for PWA Support -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(registrations => {
+        for (let registration of registrations) {
+          registration.update();
+        }
+      });
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js?v=10.0.0').catch(err => {
+          console.log('[SW] Service Worker note:', err);
+        });
+      });
+    }
+  </script>
+
+  <!-- Main ES Module Entry Point -->
+  <script type="module" src="/js/app.js?v=10.0.0"></script>
+</body>
+</html>

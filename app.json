@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "Kameti",
+    "slug": "kameti-mobile-app",
+    "scheme": "kameti",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFFFF"
+    },
+    "androidStatusBar": {
+      "hidden": true,
+      "translucent": true,
+      "backgroundColor": "#00000000"
+    },
+    "androidNavigationBar": {
+      "visible": "immersive"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.kameti.mobile"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
+      },
+      "package": "com.kameti.mobile"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}
