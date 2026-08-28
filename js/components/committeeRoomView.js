@@ -464,10 +464,10 @@ export function renderCommitteeRoomView(container, {
           <div style="text-align: left; margin-bottom: 16px;">
             <div style="font-size: 10px; font-weight: 800; color: #71717A; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px;">ATTACHED PAYMENT PROOF</div>
             ${proofUrl ? `
-              <div id="proof-thumbnail-card" style="background-color: #F4F4F5; border-radius: 14px; overflow: hidden; border: 1px solid #E4E4E7; cursor: pointer;">
-                <img src="${proofUrl}" alt="Payment Proof" style="width: 100%; height: 100px; object-fit: cover; display: block;" />
-                <div style="background: #FFFFFF; padding: 6px; text-align: center; font-size: 11px; font-weight: 700; color: #000000; border-top: 1px solid #E4E4E7;">
-                  🔍 Click to view full screenshot
+              <div id="proof-thumbnail-card" style="background-color: #000000; border-radius: 14px; overflow: hidden; border: 1px solid #E4E4E7; cursor: pointer;">
+                <img src="${proofUrl}" alt="Payment Proof" style="width: 100%; height: 120px; object-fit: contain; display: block; margin: 0 auto; background-color: #000000;" />
+                <div style="background: #FFFFFF; padding: 7px; text-align: center; font-size: 11.5px; font-weight: 700; color: #000000; border-top: 1px solid #E4E4E7;">
+                  🔍 Click to view full receipt
                 </div>
               </div>
             ` : `

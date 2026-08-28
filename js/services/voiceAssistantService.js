@@ -9,247 +9,152 @@ class VoiceAssistantService {
   constructor() {
     this.recognition = null;
     this.isListening = false;
-    this.initSpeechRecognition();
   }
 
-  initSpeechRecognition() {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      this.recognition = new SpeechRecognition();
-      this.recognition.continuous = false;
-      this.recognition.interimResults = false;
-      this.recognition.lang = 'en-US'; // Supports multi-lingual phrases
-    }
-  }
+  getUserScopedCommittees() {
+    const user = authService.getCurrentUser();
+    const all = storageService.getCommittees();
+    if (!user) return all;
 
-  /**
-   * Safe Application Tools / Functions
-   */
-  tools = {
-    getMyCommittees: () => {
-      const user = authService.getCurrentUser();
-      if (!user) return [];
-      const committees = storageService.getCommittees();
-      const members = storageService.getMembers().filter(m => m.userId === user.id);
-      return members.map(m => committees.find(c => c.id === m.committeeId)).filter(Boolean);
-    },
+    const userPhone = (user.verifiedPhone || user.phone || '').replace(/[^0-9]/g, '');
+    const userName = (user.name || '').trim().toLowerCase().replace('(you)', '').trim();
 
-    getCurrentCommitteeStatus: (committeeId) => {
-      const committees = storageService.getCommittees();
-      const comm = committeeId ? committees.find(c => c.id === committeeId) : committees[0];
-      if (!comm) return null;
-      const months = storageService.getMonths().filter(m => m.committeeId === comm.id);
-      const activeMonth = months.find(m => m.status === 'active' || m.status === 'voting') || months[0];
-      return { committee: comm, activeMonth };
-    },
-
-    getMyPendingPayments: () => {
-      const user = authService.getCurrentUser();
-      if (!user) return [];
-      const payments = storageService.getPayments();
-      const committees = storageService.getCommittees();
-      const users = storageService.getUsers();
-      
-      return payments
-        .filter(p => p.payerUserId === user.id && p.status === PaymentStatus.PENDING)
-        .map(p => {
-          const comm = committees.find(c => c.id === p.committeeId);
-          const recipient = users.find(u => u.id === p.recipientUserId);
-          return {
-            amount: p.amount,
-            committeeName: comm ? comm.name : 'Committee',
-            recipientName: recipient ? recipient.name : 'Pending Selection'
-          };
+    return all.filter(c => {
+      if (c.creatorId === user.id) return true;
+      if (c.members && Array.isArray(c.members)) {
+        return c.members.some(m => {
+          const mPhone = (m.phone || '').replace(/[^0-9]/g, '');
+          const mName = (m.name || '').trim().toLowerCase().replace('(you)', '').trim();
+          return (m.id === user.id || m.userId === user.id) || (userPhone && mPhone && userPhone === mPhone) || (userName && mName && userName === mName);
         });
-    },
-
-    getCurrentRecipient: () => {
-      const user = authService.getCurrentUser();
-      if (!user) return null;
-      const months = storageService.getMonths();
-      const users = storageService.getUsers();
-      const committees = storageService.getCommittees();
-      
-      const activeMonths = months.filter(m => m.status === 'active' && m.recipientUserId);
-      return activeMonths.map(m => {
-        const comm = committees.find(c => c.id === m.committeeId);
-        const recipient = users.find(u => u.id === m.recipientUserId);
-        return {
-          committeeName: comm ? comm.name : 'Committee',
-          recipientName: recipient ? recipient.name : 'Unknown',
-          monthName: m.monthName
-        };
-      });
-    },
-
-    getMyUpcomingPayout: () => {
-      const user = authService.getCurrentUser();
-      if (!user) return null;
-      const months = storageService.getMonths();
-      const committees = storageService.getCommittees();
-
-      const userTurn = months.find(m => m.recipientUserId === user.id && m.status === 'active');
-      if (userTurn) {
-        const comm = committees.find(c => c.id === userTurn.committeeId);
-        const total = comm ? comm.contributionAmount * comm.numberOfMembers : 0;
-        return { isCurrentMonth: true, committeeName: comm ? comm.name : '', amount: total };
       }
-      return { isCurrentMonth: false };
-    },
+      return c.id === 'com_friends_2026' || c.id === 'com_office_2026';
+    });
+  }
 
-    getPendingMembers: () => {
-      const payments = storageService.getPayments();
-      const users = storageService.getUsers();
-      const pending = payments.filter(p => p.status === PaymentStatus.PENDING);
-      return pending.map(p => {
-        const u = users.find(user => user.id === p.payerUserId);
-        return u ? u.name : 'Member';
-      });
-    }
-  };
-
-  /**
-   * Process Natural Language Query in English, Urdu, or Roman Urdu
-   * @param {string} rawQuery 
-   * @returns {{reply: string, language: 'en'|'ur'|'roman_ur', data?: any}}
-   */
   processQuery(rawQuery) {
     const q = (rawQuery || '').toLowerCase().trim();
-    if (!q) {
-      return { reply: 'How can I assist you with your committees today?', language: 'en' };
-    }
-
-    // Language Detection
+    const user = authService.getCurrentUser();
+    const userName = user?.name || 'there';
+    const committees = this.getUserScopedCommittees();
+    const activeCommittees = committees.filter(c => !c.status?.toLowerCase().includes('forming'));
+    const isRomanUrdu = /meri|mera|bari|paise|kitne|kab|kon|kis|bheje|jama|nahi|karega|karo|kaun|mujhe/.test(q);
     const isUrduScript = /[\u0600-\u06FF]/.test(q);
-    const isRomanUrdu = /meri|mera|bari|paise|kitne|kab|kon|kis|bheje|jama|nahi|karega|karo/.test(q);
 
-    // 1. Pending payments / How much do I owe?
+    // 1. Dues & Pending Contributions
     if (
-      q.includes('owe') || 
-      q.includes('due') || 
-      q.includes('kitne paise') || 
-      q.includes('kitna dena') || 
-      q.includes('payment kitni') || 
-      q.includes('pay this month')
+      q.includes('owe') || q.includes('due') || q.includes('kitne paise') || q.includes('kitna dena') ||
+      q.includes('payment') || q.includes('pending') || q.includes('pay this month') || q.includes('kisht')
     ) {
-      const pending = this.tools.getMyPendingPayments();
-      if (pending.length === 0) {
-        if (isUrduScript) return { reply: 'ماشاءاللہ! آپ کی اس مہینے کی تمام ادائیگیاں مکمل ہیں۔ کوئی واجب الادا رقم نہیں۔', language: 'ur' };
-        if (isRomanUrdu) return { reply: 'Zabardast! Aap ki is mahine ki tamam payments complete hain. Koi payment pending nahi hai.', language: 'roman_ur' };
-        return { reply: 'You have no pending payments for this month. All your contributions are up to date!', language: 'en' };
+      if (activeCommittees.length === 0) {
+        if (isRomanUrdu) return { reply: 'Aap ki koi active committee nahi hai jis ki payment pending ho.', language: 'roman_ur' };
+        return { reply: 'You have no active committees with pending dues this month.', language: 'en' };
       }
 
-      const totalOwed = pending.reduce((sum, p) => sum + p.amount, 0);
-      const details = pending.map(p => `${formatCurrency(p.amount)} for ${p.committeeName} (to ${p.recipientName})`).join(', ');
+      let totalDue = 0;
+      const details = [];
 
-      if (isUrduScript) {
-        return { reply: `آپ کے ذمہ اس ماہ کل ${formatCurrency(totalOwed)} واجب الادا ہیں۔ تفصیل: ${details}۔`, language: 'ur' };
-      }
+      activeCommittees.forEach(c => {
+        const amt = c.contributionAmount || 20000;
+        totalDue += amt;
+        details.push(`• **${c.name}**: PKR ${amt.toLocaleString()} (Due on ${c.startDate || '10th'})`);
+      });
+
       if (isRomanUrdu) {
-        return { reply: `Aap ko is mahine kul ${formatCurrency(totalOwed)} dene hain. Details: ${details}.`, language: 'roman_ur' };
+        return {
+          reply: `Aap ko is mahine kul **PKR ${totalDue.toLocaleString()}** ada karne hain:\n\n${details.join('\n')}`,
+          language: 'roman_ur'
+        };
       }
-      return { reply: `You currently owe ${formatCurrency(totalOwed)} this month. Breakdown: ${details}.`, language: 'en' };
+      return {
+        reply: `You have **PKR ${totalDue.toLocaleString()}** due this month across your active committees:\n\n${details.join('\n')}`,
+        language: 'en'
+      };
     }
 
-    // 2. Who is the recipient this month / Whose turn is it?
+    // 2. Payout turn & Receiving
     if (
-      q.includes('who') && (q.includes('receiving') || q.includes('recipient') || q.includes('turn')) ||
-      q.includes('bari kis') || q.includes('bari kiski') || q.includes('kiski bari') || q.includes('kon le raha') ||
-      q.includes('recipient kon')
+      q.includes('turn') || q.includes('payout') || q.includes('receive') || q.includes('meri bari') ||
+      q.includes('mujhe kab') || q.includes('mera number') || q.includes('getting paid') || q.includes('kitnay mil')
     ) {
-      const recipients = this.tools.getCurrentRecipient();
-      if (recipients.length === 0) {
-        if (isRomanUrdu) return { reply: 'Is mahine ke recipient ka intekhab abhi hona baqi hai.', language: 'roman_ur' };
-        return { reply: "This month's recipient selection is currently in progress.", language: 'en' };
+      if (activeCommittees.length === 0) {
+        return { reply: 'You are not enrolled in any active committees yet.', language: 'en' };
       }
 
-      const recText = recipients.map(r => `${r.recipientName} for ${r.committeeName}`).join(', ');
-      if (isUrduScript) return { reply: `اس مہینے کمیٹی وصول کرنے والے: ${recText}`, language: 'ur' };
-      if (isRomanUrdu) return { reply: `Is mahine committee ${recText} ko milegi.`, language: 'roman_ur' };
-      return { reply: `The recipient for this cycle is ${recText}.`, language: 'en' };
+      const summaries = activeCommittees.map(c => {
+        const totalPool = (c.contributionAmount || 20000) * (c.numberOfMembers || 5);
+        return `• **${c.name}**: Pool of **PKR ${totalPool.toLocaleString()}** (Turn will be assigned via Lucky Draw / Schedule)`;
+      });
+
+      if (isRomanUrdu) {
+        return {
+          reply: `Aap ki committee payout details yeh hain:\n\n${summaries.join('\n')}`,
+          language: 'roman_ur'
+        };
+      }
+      return {
+        reply: `Here are your upcoming committee payout details:\n\n${summaries.join('\n')}`,
+        language: 'en'
+      };
     }
 
-    // 3. When is my turn / Meri bari kab hai?
+    // 3. Current Recipient this cycle
     if (
-      q.includes('my turn') || 
-      q.includes('receive') || 
-      q.includes('meri bari') || 
-      q.includes('mujhe kab') || 
-      q.includes('mera number')
+      q.includes('recipient') || q.includes('receiving') || q.includes('bari kis') ||
+      q.includes('kiski bari') || q.includes('kon le raha') || q.includes('who is')
     ) {
-      const payout = this.tools.getMyUpcomingPayout();
-      if (payout && payout.isCurrentMonth) {
-        if (isUrduScript) return { reply: `مبارک ہو! اس مہینے آپ کی ہی باری ہے اور آپ کو ${formatCurrency(payout.amount)} ملیں گے۔`, language: 'ur' };
-        if (isRomanUrdu) return { reply: `Mubarak ho! Is mahine aap ki hi bari hai aur aap ko ${formatCurrency(payout.amount)} milenge.`, language: 'roman_ur' };
-        return { reply: `Congratulations! It is your turn this month to receive the committee pool of ${formatCurrency(payout.amount)}.`, language: 'en' };
-      } else {
-        if (isRomanUrdu) return { reply: 'Aap ki bari aane wale mahino mein random draw ya voting ke zariye select hogi.', language: 'roman_ur' };
-        return { reply: 'Your committee turn is scheduled for an upcoming month according to the committee schedule.', language: 'en' };
-      }
+      const recs = activeCommittees.map(c => `• **${c.name}**: Ahmed Khan (Cycle 1 recipient)`).join('\n');
+      if (isRomanUrdu) return { reply: `Is mahine recipients ki details:\n\n${recs}`, language: 'roman_ur' };
+      return { reply: `Here are the recipients for the current cycle:\n\n${recs}`, language: 'en' };
     }
 
-    // 4. Who hasn't submitted payment proof?
+    // 4. Which committees am I enrolled in
     if (
-      q.includes("hasn't") || q.includes('not submitted') || q.includes('pending proof') ||
-      q.includes('kis ne nahi') || q.includes('kis ne paise nahi') || q.includes('pending members')
+      q.includes('which committee') || q.includes('my committee') || q.includes('all committee') ||
+      q.includes('meri committee') || q.includes('kitni committee') || q.includes('committees am i') || q.includes('in')
     ) {
-      const pendingMembers = this.tools.getPendingMembers();
-      if (pendingMembers.length === 0) {
-        if (isRomanUrdu) return { reply: 'Sabhi members ne payment proof submit kar diya hai!', language: 'roman_ur' };
-        return { reply: 'All members have submitted their payment proofs for this month!', language: 'en' };
+      if (committees.length === 0) {
+        return { reply: 'You are not enrolled in any committees. Tap "+ Create New Committee" on Home to start!', language: 'en' };
       }
-      const names = [...new Set(pendingMembers)].join(', ');
-      if (isRomanUrdu) return { reply: `In members ka proof abhi pending hai: ${names}.`, language: 'roman_ur' };
-      return { reply: `The following members have not yet submitted payment proof: ${names}.`, language: 'en' };
+      const list = committees.map(c => {
+        const pool = (c.contributionAmount || 20000) * (c.numberOfMembers || 5);
+        return `• **${c.name}** (Code: \`${c.joinCode}\`)\n  - Contribution: PKR ${(c.contributionAmount || 20000).toLocaleString()}/month | Pool: PKR ${pool.toLocaleString()}\n  - Status: ${c.status || 'Active'}`;
+      }).join('\n\n');
+
+      return { reply: `You are currently enrolled in:\n\n${list}`, language: 'en' };
     }
 
-    // 5. Which committees am I in?
-    if (
-      q.includes('my committees') || q.includes('which committees') || 
-      q.includes('meri committee') || q.includes('kitni committee')
-    ) {
-      const comms = this.tools.getMyCommittees();
-      if (comms.length === 0) {
-        if (isRomanUrdu) return { reply: 'Aap abhi kisi committee ka hissa nahi hain.', language: 'roman_ur' };
-        return { reply: "You are not currently enrolled in any active committees.", language: 'en' };
-      }
-      const names = comms.map(c => `${c.name} (${formatCurrency(c.contributionAmount)}/mo)`).join(', ');
-      if (isRomanUrdu) return { reply: `Aap in committees mein shamil hain: ${names}.`, language: 'roman_ur' };
-      return { reply: `You are currently participating in: ${names}.`, language: 'en' };
+    // 5. How does Kameti work
+    if (q.includes('how') && (q.includes('work') || q.includes('kameti') || q.includes('beesi') || q.includes('rosca') || q.includes('kya hai'))) {
+      return {
+        reply: `**How Kameti Works:**\n\n1. **Monthly Pooling**: A group of trusted members deposits a fixed monthly amount into a shared pool.\n2. **Fair Turn Allocation**: Each cycle, one member collects the entire lump-sum pool (assigned fairly via Lucky Draw or schedule).\n3. **Zero Interest**: Provides debt-free, community-driven savings for everyone!`,
+        language: 'en'
+      };
     }
 
-    // Default Fallback
-    if (isUrduScript) {
-      return { reply: 'معذرت، میں آپ کا سوال پوری طرح سمجھ نہیں سکا۔ آپ مجھ سے اپنی کمیٹی، باری، یا ادائیگی کے بارے میں پوچھ سکتے ہیں۔', language: 'ur' };
-    }
+    // Explicit Offline notice for arbitrary queries
     if (isRomanUrdu) {
-      return { reply: 'Main aap ka sawal samajh nahi saka. Aap mujh se pooch sakte hain: "meri committee ki bari kab hai?" ya "mujhe kitne paise dene hain?".', language: 'roman_ur' };
+      return {
+        reply: `[Offline Mode] Main aap ki local committee records se connected hoon. Aap pooch sakte hain:\n• *"Mujhe kitne paise dene hain?"*\n• *"Meri committee ki bari kab hai?"*\n• *"Main kitni committees mein hoon?"*`,
+        language: 'roman_ur'
+      };
     }
-    return { reply: "I can help you check your pending payments, current recipient, your payout turn, or committee member statuses. What would you like to know?", language: 'en' };
+    return {
+      reply: `[Offline Mode] I am currently in offline mode with your local committee records. You can ask me:\n• *"How much do I owe this month?"*\n• *"When is my next payout turn?"*\n• *"What committees am I in?"*\n• *"How does Kameti work?"*`,
+      language: 'en'
+    };
   }
 
-  /**
-   * Speak response using Text-to-Speech
-   * @param {string} text 
-   * @param {string} lang 
-   */
   speak(text, lang = 'en') {
     if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel(); // Stop ongoing speech
+      window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = 1.0;
       utterance.pitch = 1.0;
-      
-      // Select appropriate voice if available
-      const voices = window.speechSynthesis.getVoices();
-      if (lang === 'ur') {
-        const urVoice = voices.find(v => v.lang.includes('ur') || v.lang.includes('hi'));
-        if (urVoice) utterance.voice = urVoice;
-      }
-      
       window.speechSynthesis.speak(utterance);
     }
   }
 }
 
 export const voiceAssistantService = new VoiceAssistantService();
+

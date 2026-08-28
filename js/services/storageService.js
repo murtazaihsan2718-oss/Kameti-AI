@@ -235,13 +235,13 @@ class StorageService {
       }
     ];
 
-    // Sample Payment Proofs
+    // Sample Payment Proofs (Base64 Encoded for Safe HTML Attribute Rendering)
     const proofs = [
       {
         id: 'prf_hamza',
         paymentId: 'pay_2',
         uploadedBy: 'usr_hamza',
-        fileUrl: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="600" viewBox="0 0 400 600"><rect width="400" height="600" fill="%230F766E"/><rect x="20" y="20" width="360" height="560" rx="16" fill="white"/><text x="200" y="80" text-anchor="middle" font-family="sans-serif" font-size="20" font-weight="bold" fill="%230F766E">Easypaisa Receipt</text><line x1="40" y1="110" x2="360" y2="110" stroke="%23CBD5E1" stroke-width="2"/><text x="50" y="160" font-family="sans-serif" font-size="14" fill="%2364748B">Amount Sent</text><text x="50" y="190" font-family="sans-serif" font-size="24" font-weight="bold" fill="%230F172A">Rs. 20,000</text><text x="50" y="240" font-family="sans-serif" font-size="14" fill="%2364748B">Transferred To</text><text x="50" y="270" font-family="sans-serif" font-size="18" font-weight="bold" fill="%230F172A">Ahmed Khan (0300 5550202)</text><text x="50" y="320" font-family="sans-serif" font-size="14" fill="%2364748B">Sender</text><text x="50" y="350" font-family="sans-serif" font-size="16" fill="%230F172A">Hamza Ali</text><text x="50" y="400" font-family="sans-serif" font-size="14" fill="%2364748B">Transaction ID</text><text x="50" y="430" font-family="sans-serif" font-size="15" font-family="monospace" fill="%230D9488">TRX-98234190823</text><rect x="40" y="480" width="320" height="50" rx="8" fill="%23D1FAE5"/><text x="200" y="512" text-anchor="middle" font-family="sans-serif" font-size="15" font-weight="bold" fill="%23065F46">Successful Transaction</text></svg>',
+        fileUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iNjAwIiB2aWV3Qm94PSIwIDAgNDAwIDYwMCI+PHJlY3Qgd2lkdGg9IjQwMCIgaGVpZ2h0PSI2MDAiIGZpbGw9IiMwRjc2NkUiLz48cmVjdCB4PSIyMCIgeT0iMjAiIHdpZHRoPSIzNjAiIGhlaWdodD0iNTYwIiByeD0iMTYiIGZpbGw9IndoaXRlIi8+PHRleHQgeD0iMjAwIiB5PSI4MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjAiIGZvbnQtd2VpZ2h0PSJib2xkIiBmaWxsPSIjMEY3NjZFIj5FYXN5cGFpc2EgUmVjZWlwdDwvdGV4dD48bGluZSB4MT0iNDAiIHkxPSIxMTAiIHgyPSIzNjAiIHkyPSIxMTAiIHN0cm9rZT0iI0NCRDVFMSIgc3Ryb2tlLXdpZHRoPSIyIi8+PHRleHQgeD0iNTAiIHk9IjE2MCIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM2NDc0OEIiPkFtb3VudCBTZW50PC90ZXh0Pjx0ZXh0IHg9IjUwIiB5PSIxOTAiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIiBmb250LXNpemU9IjI0IiBmb250LXdlaWdodD0iYm9sZCIgZmlsbD0iIzBGMTcyQSI+UnMuIDIwLDAwMDwvdGV4dD48dGV4dCB4PSI1MCIgeT0iMjQwIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzY0NzQ4QiI+VHJhbnNmZXJyZWQgVG88L3RleHQ+PHRleHQgeD0iNTAiIHk9IjI3MCIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTgiIGZvbnQtd2VpZ2h0PSJib2xkIiBmaWxsPSIjMEYxNzJBIj5BaG1lZCBLaGFuICgwMzAwIDU1NTAyMDIpPC90ZXh0Pjx0ZXh0IHg9IjUwIiB5PSIzMjAiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIiBmb250LXNpemU9IjE0IiBmaWxsPSIjNjQ3NDhCIj5TZW5kZXI8L3RleHQ+PHRleHQgeD0iNTAiIHk9IjM1MCIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTYiIGZvbnQtd2VpZ2h0PSJib2xkIiBmaWxsPSIjMEYxNzJBIj5IYW16YSBBbGk8L3RleHQ+PHRleHQgeD0iNTAiIHk9IjQwMCIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM2NDc0OEIiPlRyYW5zYWN0aW9uIElEPC90ZXh0Pjx0ZXh0IHg9IjUwIiB5PSI0MzAiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIiBmb250LXNpemU9IjE1IiBmb250LWZhbWlseT0ibW9ub3NwYWNlIiBmaWxsPSIjMEQ5NDg4Ij5UUlgtOTgyMzQxOTA4MjM8L3RleHQ+PHJlY3QgeD0iNDAiIHk9IjQ4MCIgd2lkdGg9IjMyMCIgaGVpZ2h0PSI1MCIgcng9IjgiIGZpbGw9IiNEMUZBRTUiLz48dGV4dCB4PSIyMDAiIHk9IjUxMiIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTUiIGZvbnQtd2VpZ2h0PSJib2xkIiBmaWxsPSIjMDY1RjQ2Ij5TdWNjZXNzZnVsIFRyYW5zYWN0aW9uPC90ZXh0Pjwvc3ZnPg==',
         fileType: 'image/svg+xml',
         uploadedAt: '2026-08-20T14:30:00Z',
         notes: 'Transferred via JazzCash to Ahmed'
@@ -250,7 +250,7 @@ class StorageService {
         id: 'prf_fatima',
         paymentId: 'pay_4',
         uploadedBy: 'usr_fatima',
-        fileUrl: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="600" viewBox="0 0 400 600"><rect width="400" height="600" fill="%231E293B"/><rect x="20" y="20" width="360" height="560" rx="16" fill="white"/><text x="200" y="80" text-anchor="middle" font-family="sans-serif" font-size="20" font-weight="bold" fill="%231E293B">SadaPay Transfer</text><line x1="40" y1="110" x2="360" y2="110" stroke="%23CBD5E1" stroke-width="2"/><text x="50" y="160" font-family="sans-serif" font-size="14" fill="%2364748B">Amount</text><text x="50" y="190" font-family="sans-serif" font-size="24" font-weight="bold" fill="%230F172A">Rs. 20,000</text><text x="50" y="240" font-family="sans-serif" font-size="14" fill="%2364748B">To</text><text x="50" y="270" font-family="sans-serif" font-size="18" font-weight="bold" fill="%230F172A">Ahmed Khan</text><rect x="40" y="480" width="320" height="50" rx="8" fill="%23D1FAE5"/><text x="200" y="512" text-anchor="middle" font-family="sans-serif" font-size="15" font-weight="bold" fill="%23065F46">Payment Completed</text></svg>',
+        fileUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iNjAwIiB2aWV3Qm94PSIwIDAgNDAwIDYwMCI+PHJlY3Qgd2lkdGg9IjQwMCIgaGVpZ2h0PSI2MDAiIGZpbGw9IiMxRTI5M0IiLz48cmVjdCB4PSIyMCIgeT0iMjAiIHdpZHRoPSIzNjAiIGhlaWdodD0iNTYwIiByeD0iMTYiIGZpbGw9IndoaXRlIi8+PHRleHQgeD0iMjAwIiB5PSI4MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMjAiIGZvbnQtd2VpZ2h0PSJib2xkIiBmaWxsPSIjMUUyOTNCIj5TYWRhUGF5IFRyYW5zZmVyPC90ZXh0PjxsaW5lIHgxPSI0MCIgeTE9IjExMCIgeDI9IjM2MCIgeTI9IjExMCIgc3Ryb2tlPSIjQ0JENUUxIiBzdHJva2Utd2lkdGg9IjIiLz48dGV4dCB4PSI1MCIgeT0iMTYwIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzY0NzQ4QiI+QW1vdW50PC90ZXh0Pjx0ZXh0IHg9IjUwIiB5PSIxOTAiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIiBmb250LXNpemU9IjI0IiBmb250LXdlaWdodD0iYm9sZCIgZmlsbD0iIzBGMTcyQSI+UnMuIDIwLDAwMDwvdGV4dD48dGV4dCB4PSI1MCIgeT0iMjQwIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzY0NzQ4QiI+VG88L3RleHQ+PHRleHQgeD0iNTAiIHk9IjI3MCIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTgiIGZvbnQtd2VpZ2h0PSJib2xkIiBmaWxsPSIjMEYxNzJBIj5BaG1lZCBLaGFuPC90ZXh0PjxyZWN0IHg9IjQwIiB5PSI0ODAiIHdpZHRoPSIzMjAiIGhlaWdodD0iNTAiIHJ4PSI4IiBmaWxsPSIjRDFGQUU1Ii8+PHRleHQgeD0iMjAwIiB5PSI1MTIiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIiBmb250LXNpemU9IjE1IiBmb250LXdlaWdodD0iYm9sZCIgZmlsbD0iIzA2NUY0NiI+UGF5bWVudCBDb21wbGV0ZWQ8L3RleHQ+PC9zdmc+',
         fileType: 'image/svg+xml',
         uploadedAt: '2026-08-21T09:15:00Z',
         notes: 'Paid via SadaPay'
@@ -344,7 +344,17 @@ class StorageService {
   }
 
   getProofs() {
-    return this.getItem(STORAGE_KEYS.PROOFS, []);
+    const proofs = this.getItem(STORAGE_KEYS.PROOFS, []);
+    return proofs.map(p => {
+      if (p.fileUrl && p.fileUrl.startsWith('data:image/svg+xml;utf8,<svg')) {
+        const svgContent = p.fileUrl.replace('data:image/svg+xml;utf8,', '');
+        return {
+          ...p,
+          fileUrl: 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgContent)))
+        };
+      }
+      return p;
+    });
   }
   setProofs(proofs) {
     this.setItem(STORAGE_KEYS.PROOFS, proofs);
