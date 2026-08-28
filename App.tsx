@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, Pressable, Platform, SafeAreaView, StatusBar as RNStatusBar, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Platform, SafeAreaView, StatusBar as RNStatusBar, Animated, Easing, Keyboard } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as Linking from 'expo-linking';
 import * as NavigationBar from 'expo-navigation-bar';
@@ -8,23 +8,26 @@ import { colors } from './src/theme/theme';
 import { nativeStorageService } from './src/services/storageService';
 import { LinkingService } from './src/services/linkingService';
 import { FirebaseService } from './src/services/firebaseService';
-import { Member } from './src/types/dataTypes';
+import { Member, UserProfile } from './src/types/dataTypes';
 
+import { OnboardingScreen } from './src/screens/OnboardingScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { CommitteeRoomScreen } from './src/screens/CommitteeRoomScreen';
 import { CreateCommitteeScreen } from './src/screens/CreateCommitteeScreen';
 import { JoinCommitteeScreen } from './src/screens/JoinCommitteeScreen';
 import { NotificationsScreen } from './src/screens/NotificationsScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
-import { VoiceAssistantModal } from './src/components/VoiceAssistantModal';
+import { ChatAssistantScreen } from './src/screens/ChatAssistantScreen';
 import { TactilePressable } from './src/components/TactilePressable';
 
 export default function App() {
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [currentTab, setCurrentTab] = useState<'home' | 'voice' | 'activity'>('home');
   const [activeScreen, setActiveScreen] = useState<'home' | 'room' | 'create' | 'join' | 'profile'>('home');
   const [selectedCommitteeId, setSelectedCommitteeId] = useState<string>('c1');
   const [prefilledJoinCode, setPrefilledJoinCode] = useState<string>('');
   const [isReady, setIsReady] = useState(false);
+  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
 
   const screenFadeAnim = useRef(new Animated.Value(1)).current;
   const screenTranslateY = useRef(new Animated.Value(0)).current;
@@ -61,8 +64,25 @@ export default function App() {
       NavigationBar.setBehaviorAsync('overlay-swipe').catch(() => {});
     }
 
-    nativeStorageService.init().then(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvent, () => setIsKeyboardOpen(true));
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setIsKeyboardOpen(false);
+      if (Platform.OS === 'android') {
+        NavigationBar.setVisibilityAsync('hidden').catch(() => {});
+      }
+    });
+
+    nativeStorageService.init().then(async () => {
+      const user = await nativeStorageService.getUser();
+      setCurrentUser(user);
       setIsReady(true);
+    });
+
+    const unsubStorage = nativeStorageService.subscribe(async () => {
+      const user = await nativeStorageService.getUser();
+      setCurrentUser(user);
     });
 
     const handleUrl = async (url: string | null) => {
@@ -78,7 +98,10 @@ export default function App() {
       handleUrl(event.url);
     });
     return () => {
+      showSub.remove();
+      hideSub.remove();
       subscription.remove();
+      unsubStorage();
     };
   }, []);
 
@@ -96,6 +119,10 @@ export default function App() {
 
       if (committee) {
         const user = await nativeStorageService.getUser();
+        if (!user) {
+          setActiveScreen('join');
+          return;
+        }
         const newMember: Member = {
           id: user.id,
           name: `${user.name} (You)`,
@@ -183,8 +210,8 @@ export default function App() {
 
     if (currentTab === 'voice') {
       return (
-        <VoiceAssistantModal
-          onClose={() => {
+        <ChatAssistantScreen
+          onBack={() => {
             setCurrentTab('home');
             setActiveScreen('home');
           }}
@@ -197,7 +224,15 @@ export default function App() {
     }
 
     if (activeScreen === 'profile') {
-      return <ProfileScreen onBack={() => setActiveScreen('home')} />;
+      return (
+        <ProfileScreen
+          onBack={() => setActiveScreen('home')}
+          onLogout={() => {
+            setActiveScreen('home');
+            setCurrentTab('home');
+          }}
+        />
+      );
     }
 
     if (activeScreen === 'room') {
@@ -289,6 +324,21 @@ export default function App() {
     topPaddingValue = 28;
   }
 
+  if (!currentUser) {
+    return (
+      <SafeAreaView style={[styles.safeArea, { paddingTop: topPaddingValue }]}>
+        <StatusBar hidden={true} translucent={true} backgroundColor="transparent" />
+        <OnboardingScreen
+          onComplete={(user) => {
+            setCurrentUser(user);
+            setActiveScreen('home');
+            setCurrentTab('home');
+          }}
+        />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={[styles.safeArea, { paddingTop: topPaddingValue }]}>
       {/* 100% hidden status bar with zero black cutout bar */}
@@ -307,54 +357,56 @@ export default function App() {
         {renderActiveScreen()}
       </Animated.View>
 
-      {/* Modern Floating Dock Navigation Bar with Tactile Haptic Feedback */}
-      <View style={styles.floatingDockContainer}>
-        <View style={styles.floatingDock}>
-          <TactilePressable
-            haptic="selection"
-            scaleTo={0.92}
-            style={[styles.dockItem, isHomeActive && styles.dockItemActive]}
-            onPress={() => {
-              setCurrentTab('home');
-              setActiveScreen('home');
-            }}
-          >
-            <LayoutGrid size={18} color={homeIconColor} />
-            <Text style={[styles.dockText, isHomeActive && styles.dockTextActive]}>
-              Home
-            </Text>
-          </TactilePressable>
+      {/* Modern Floating Dock Navigation Bar with Tactile Haptic Feedback (hidden when typing) */}
+      {!isKeyboardOpen && (
+        <View style={styles.floatingDockContainer}>
+          <View style={styles.floatingDock}>
+            <TactilePressable
+              haptic="selection"
+              scaleTo={0.92}
+              style={[styles.dockItem, isHomeActive && styles.dockItemActive]}
+              onPress={() => {
+                setCurrentTab('home');
+                setActiveScreen('home');
+              }}
+            >
+              <LayoutGrid size={18} color={homeIconColor} />
+              <Text style={[styles.dockText, isHomeActive && styles.dockTextActive]}>
+                Home
+              </Text>
+            </TactilePressable>
 
-          <TactilePressable
-            haptic="selection"
-            scaleTo={0.92}
-            style={[styles.dockItem, isVoiceActive && styles.dockItemActive]}
-            onPress={() => {
-              setCurrentTab('voice');
-            }}
-          >
-            <Mic size={18} color={voiceIconColor} />
-            <Text style={[styles.dockText, isVoiceActive && styles.dockTextActive]}>
-              Voice
-            </Text>
-          </TactilePressable>
+            <TactilePressable
+              haptic="selection"
+              scaleTo={0.92}
+              style={[styles.dockItem, isVoiceActive && styles.dockItemActive]}
+              onPress={() => {
+                setCurrentTab('voice');
+              }}
+            >
+              <Mic size={18} color={voiceIconColor} />
+              <Text style={[styles.dockText, isVoiceActive && styles.dockTextActive]}>
+                Voice
+              </Text>
+            </TactilePressable>
 
-          <TactilePressable
-            haptic="selection"
-            scaleTo={0.92}
-            style={[styles.dockItem, isActivityActive && styles.dockItemActive]}
-            onPress={() => {
-              setCurrentTab('activity');
-              setActiveScreen('home');
-            }}
-          >
-            <Clock size={18} color={activityIconColor} />
-            <Text style={[styles.dockText, isActivityActive && styles.dockTextActive]}>
-              Activity
-            </Text>
-          </TactilePressable>
+            <TactilePressable
+              haptic="selection"
+              scaleTo={0.92}
+              style={[styles.dockItem, isActivityActive && styles.dockItemActive]}
+              onPress={() => {
+                setCurrentTab('activity');
+                setActiveScreen('home');
+              }}
+            >
+              <Clock size={18} color={activityIconColor} />
+              <Text style={[styles.dockText, isActivityActive && styles.dockTextActive]}>
+                Activity
+              </Text>
+            </TactilePressable>
+          </View>
         </View>
-      </View>
+      )}
     </SafeAreaView>
   );
 }

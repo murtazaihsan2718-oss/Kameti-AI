@@ -176,6 +176,8 @@ export function openPaymentProofModal({
           const paymentId = payment.id || 'pay_' + committeeId + '_' + currentUser.id;
           await paymentService.submitPaymentProof(paymentId, newlySelectedImage, 'Submitted via web app');
           
+          await FirebaseService.submitMemberProof(committeeId, currentUser.id, newlySelectedImage, 'Submitted via web app');
+
           await FirebaseService.submitPaymentProof(committeeId, {
             paymentId,
             payerUserId: currentUser.id,
@@ -186,6 +188,18 @@ export function openPaymentProofModal({
             notes: 'Submitted screenshot proof',
             submittedAt: new Date().toISOString()
           });
+
+          // Also update local storage committee members
+          const committees = storageService.getCommittees ? storageService.getCommittees() : [];
+          const com = committees.find(c => c.id === committeeId);
+          if (com && com.members) {
+            const m = com.members.find(mem => mem.id === currentUser.id || mem.userId === currentUser.id);
+            if (m) {
+              m.paymentProofUrl = newlySelectedImage;
+              m.paymentStatus = 'submitted';
+              storageService.setCommittees(committees);
+            }
+          }
 
           showToast('Payment proof submitted successfully ✓');
           overlay.classList.remove('open');

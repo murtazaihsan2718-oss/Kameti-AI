@@ -123,7 +123,6 @@ export class FirebaseService {
   static async getCommitteeByCode(joinCode: string): Promise<Committee | null> {
     try {
       const cleanCode = joinCode.trim().toUpperCase();
-      await this.seedCloudCommittees();
       const snap = await getDocs(collection(db, 'committees'));
       for (const docSnap of snap.docs) {
         const data = docSnap.data() as Committee;
@@ -164,11 +163,24 @@ export class FirebaseService {
         const exists = members.some((m: any) => m.id === member.id || (member.phone && m.phone === member.phone));
         if (!exists) {
           const updatedMembers = [...members, member];
-          await updateDoc(docRef, {
+          const totalSlots = data.memberCount || data.numberOfMembers || data.totalCycles || data.duration || 5;
+          const isFull = updatedMembers.length >= totalSlots;
+
+          const updatePayload: any = {
             members: updatedMembers,
-            memberCount: updatedMembers.length,
-            numberOfMembers: updatedMembers.length,
-          });
+          };
+
+          // Auto-select random recipient as soon as committee becomes full
+          if (isFull) {
+            if (!data.currentRecipientId) {
+              const randomIndex = Math.floor(Math.random() * updatedMembers.length);
+              const chosen = updatedMembers[randomIndex];
+              updatePayload.currentRecipientId = chosen.id || chosen.userId;
+              console.log('[FirebaseService] Committee is now FULL! Auto-selected recipient:', updatePayload.currentRecipientId);
+            }
+          }
+
+          await updateDoc(docRef, updatePayload);
           console.log('[FirebaseService] Live member joined cloud committee:', member.name);
         }
       }
@@ -205,9 +217,13 @@ export class FirebaseService {
 
       if (docSnap.exists()) {
         const data = docSnap.data() as any;
-        const updatedMembers = (data.members || []).map((m: any) =>
-          m.id === recipientId ? { ...m, hasReceivedPayout: true, payoutMonthIndex: cycleIndex } : m
-        );
+        const updatedMembers = (data.members || []).map((m: any) => {
+          const mId = m.id || m.userId;
+          if (mId === recipientId) {
+            return { ...m, hasReceivedPayout: true, payoutMonthIndex: cycleIndex };
+          }
+          return m;
+        });
         await updateDoc(docRef, {
           currentRecipientId: recipientId,
           members: updatedMembers,
@@ -215,6 +231,76 @@ export class FirebaseService {
       }
     } catch (err) {
       console.log('[FirebaseService] Error updating recipient:', err);
+    }
+  }
+
+  /**
+   * Submit payment proof screenshot attached to a specific member
+   */
+  static async submitMemberProof(committeeId: string, memberId: string, proofUrl: string, notes?: string) {
+    try {
+      const docRef = doc(db, 'committees', committeeId);
+      const docSnap = await getDoc(docRef);
+
+      if (docSnap.exists()) {
+        const data = docSnap.data() as any;
+        const members = data.members || [];
+        const updatedMembers = members.map((m: any) => {
+          const mId = m.id || m.userId;
+          const match = mId === memberId || 
+                        (m.name && memberId && m.name.toLowerCase().includes(memberId.toLowerCase())) ||
+                        (memberId && memberId.toLowerCase().includes((m.name || '').toLowerCase()));
+          if (match) {
+            return {
+              ...m,
+              paymentProofUrl: proofUrl,
+              paymentStatus: 'submitted',
+              submittedAt: new Date().toISOString(),
+              paymentNotes: notes || '',
+            };
+          }
+          return m;
+        });
+
+        await updateDoc(docRef, { members: updatedMembers });
+        console.log('[FirebaseService] Submitted member payment proof in Firestore for:', memberId);
+      }
+    } catch (err) {
+      console.log('[FirebaseService] Error submitting member proof:', err);
+    }
+  }
+
+  /**
+   * Recipient verifies member payment in Cloud Firestore
+   */
+  static async verifyMemberPayment(committeeId: string, memberId: string) {
+    try {
+      const docRef = doc(db, 'committees', committeeId);
+      const docSnap = await getDoc(docRef);
+
+      if (docSnap.exists()) {
+        const data = docSnap.data() as any;
+        const members = data.members || [];
+        const updatedMembers = members.map((m: any) => {
+          const mId = m.id || m.userId;
+          const match = mId === memberId || 
+                        (m.name && memberId && m.name.toLowerCase().includes(memberId.toLowerCase())) ||
+                        (memberId && memberId.toLowerCase().includes((m.name || '').toLowerCase()));
+          if (match) {
+            return {
+              ...m,
+              paymentStatus: 'verified',
+              verifiedAt: new Date().toISOString(),
+            };
+          }
+          return m;
+        });
+
+        await updateDoc(docRef, { members: updatedMembers });
+        console.log('[FirebaseService] Verified member payment in Firestore for:', memberId);
+      }
+    } catch (err) {
+      console.log('[FirebaseService] Error verifying member payment:', err);
     }
   }
 

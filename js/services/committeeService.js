@@ -30,23 +30,53 @@ class CommitteeService {
     const committee = storageService.getCommittees().find(c => c.id === committeeId);
     if (!committee) return null;
 
-    const allMembers = storageService.getMembers().filter(m => m.committeeId === committeeId);
-    const allUsers = storageService.getUsers();
+    let membersWithProfiles = [];
+    if (committee.members && committee.members.length > 0) {
+      membersWithProfiles = committee.members.map((m, idx) => {
+        let rawName = m.name || (m.user && m.user.name) || 'Member';
+        let cleanName = rawName.replace(/\s*\(you\)/i, '').trim();
+        const u = {
+          id: m.id || m.userId || `u_${idx}`,
+          name: cleanName,
+          verifiedPhone: m.phone || (m.user && m.user.verifiedPhone) || '03XX XXXXXXX',
+          paymentMethod: m.paymentMethod || (m.user && m.user.paymentMethod) || 'EasyPaisa',
+          paymentNumber: m.accountNumber || (m.user && m.user.paymentNumber) || '03XX XXXXXXX',
+          accountTitle: m.accountTitle || cleanName
+        };
+        return {
+          id: m.id || m.userId || `u_${idx}`,
+          userId: m.id || m.userId || `u_${idx}`,
+          name: cleanName,
+          phone: m.phone,
+          committeeId: committee.id,
+          paymentProofUrl: m.paymentProofUrl || null,
+          paymentStatus: m.paymentStatus || 'pending',
+          paymentNotes: m.paymentNotes || '',
+          hasReceivedPayout: m.hasReceivedPayout || false,
+          payoutMonthIndex: m.payoutMonthIndex || null,
+          user: u,
+          ...m
+        };
+      });
+    } else {
+      const allMembers = storageService.getMembers().filter(m => m.committeeId === committeeId);
+      const allUsers = storageService.getUsers();
 
-    // Map members with user profile details
-    const membersWithProfiles = allMembers.map(m => {
-      const u = allUsers.find(user => user.id === m.userId) || {
-        id: m.userId,
-        name: 'Member',
-        verifiedPhone: 'Hidden',
-        paymentMethod: 'Easypaisa',
-        paymentNumber: '0300 0000000'
-      };
-      return {
-        ...m,
-        user: u
-      };
-    });
+      // Map members with user profile details
+      membersWithProfiles = allMembers.map(m => {
+        const u = allUsers.find(user => user.id === m.userId) || {
+          id: m.userId,
+          name: 'Member',
+          verifiedPhone: 'Hidden',
+          paymentMethod: 'Easypaisa',
+          paymentNumber: '0300 0000000'
+        };
+        return {
+          ...m,
+          user: u
+        };
+      });
+    }
 
     const months = storageService.getMonths().filter(m => m.committeeId === committeeId);
     let currentMonth = months.find(m => m.status === 'active' || m.status === 'voting') || months[0] || null;

@@ -33,13 +33,19 @@ export const PaymentProofModal: React.FC<PaymentProofModalProps> = ({
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
-        quality: 0.8,
+        quality: 0.6,
+        base64: true,
       });
 
       if (!result.canceled) {
         if (result.assets) {
           if (result.assets.length > 0) {
-            setSelectedImageUri(result.assets[0].uri);
+            const asset = result.assets[0];
+            let dataUri = asset.uri;
+            if (asset.base64) {
+              dataUri = `data:image/jpeg;base64,${asset.base64}`;
+            }
+            setSelectedImageUri(dataUri);
           }
         }
       }

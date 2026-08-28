@@ -129,10 +129,6 @@ export class FirebaseService {
   static async getCommitteeByCode(joinCode) {
     try {
       const cleanCode = joinCode.trim().toUpperCase();
-      
-      // Ensure seed committees exist in Cloud Firestore
-      await this.seedCloudCommittees();
-
       const snap = await getDocs(collection(db, 'committees'));
       for (const docSnap of snap.docs) {
         const data = docSnap.data();
@@ -187,16 +183,122 @@ export class FirebaseService {
         
         if (!exists) {
           const updatedMembers = [...cleanExisting, member];
-          await updateDoc(docRef, {
+          const totalSlots = data.memberCount || data.numberOfMembers || data.totalCycles || data.duration || 5;
+          const isFull = updatedMembers.length >= totalSlots;
+
+          const updatePayload = {
             members: updatedMembers,
-            memberCount: updatedMembers.length,
-            numberOfMembers: data.numberOfMembers || data.memberCount || updatedMembers.length,
-          });
+          };
+
+          if (isFull) {
+            if (!data.currentRecipientId) {
+              const randomIndex = Math.floor(Math.random() * updatedMembers.length);
+              const chosen = updatedMembers[randomIndex];
+              updatePayload.currentRecipientId = chosen.id || chosen.userId;
+              console.log('[FirebaseService Web] Committee is now FULL! Auto-selected recipient:', updatePayload.currentRecipientId);
+            }
+          }
+
+          await updateDoc(docRef, updatePayload);
           console.log('[FirebaseService Web] Live member joined cloud committee:', member.name);
         }
       }
     } catch (err) {
       console.log('[FirebaseService Web] Error joining committee:', err);
+    }
+  }
+
+  /**
+   * Submit payment proof screenshot attached to a specific member
+   */
+  static async submitMemberProof(committeeId, memberId, proofUrl, notes = '') {
+    try {
+      let docRef = doc(db, 'committees', committeeId);
+      let docSnap = await getDoc(docRef);
+
+      if (!docSnap.exists()) {
+        const snap = await getDocs(collection(db, 'committees'));
+        for (const d of snap.docs) {
+          const cData = d.data();
+          if (d.id === committeeId || cData.id === committeeId || cData.joinCode === committeeId) {
+            docRef = doc(db, 'committees', d.id);
+            docSnap = d;
+            break;
+          }
+        }
+      }
+
+      if (docSnap && docSnap.exists()) {
+        const data = docSnap.data();
+        const members = data.members || [];
+        const updatedMembers = members.map((m) => {
+          const mId = m.id || m.userId;
+          const match = mId === memberId || 
+                        (m.name && memberId && m.name.toLowerCase().includes(memberId.toLowerCase())) ||
+                        (memberId && memberId.toLowerCase().includes((m.name || '').toLowerCase()));
+          if (match) {
+            return {
+              ...m,
+              paymentProofUrl: proofUrl,
+              paymentStatus: 'submitted',
+              submittedAt: new Date().toISOString(),
+              paymentNotes: notes || '',
+            };
+          }
+          return m;
+        });
+
+        await updateDoc(docRef, { members: updatedMembers });
+        console.log('[FirebaseService Web] Live member proof updated in Cloud Firestore for:', memberId);
+      }
+    } catch (err) {
+      console.log('[FirebaseService Web] Error submitting member proof:', err);
+    }
+  }
+
+  /**
+   * Recipient verifies member payment in Cloud Firestore
+   */
+  static async verifyMemberPayment(committeeId, memberId) {
+    try {
+      let docRef = doc(db, 'committees', committeeId);
+      let docSnap = await getDoc(docRef);
+
+      if (!docSnap.exists()) {
+        const snap = await getDocs(collection(db, 'committees'));
+        for (const d of snap.docs) {
+          const cData = d.data();
+          if (d.id === committeeId || cData.id === committeeId || cData.joinCode === committeeId) {
+            docRef = doc(db, 'committees', d.id);
+            docSnap = d;
+            break;
+          }
+        }
+      }
+
+      if (docSnap && docSnap.exists()) {
+        const data = docSnap.data();
+        const members = data.members || [];
+        const updatedMembers = members.map((m) => {
+          const mId = m.id || m.userId;
+          const match = mId === memberId || 
+                        (m.name && memberId && m.name.toLowerCase().includes(memberId.toLowerCase())) ||
+                        (memberId && memberId.toLowerCase().includes((m.name || '').toLowerCase()));
+          if (match) {
+            return {
+              ...m,
+              paymentStatus: 'verified',
+              verifiedAt: new Date().toISOString(),
+            };
+          }
+          return m;
+        });
+
+        await updateDoc(docRef, { members: updatedMembers });
+        console.log('[FirebaseService Web] Live member payment verified in Cloud Firestore for:', memberId);
+      }
+    } catch (err) {
+      console.log('[FirebaseService Web] Error verifying member payment:', err);
     }
   }
 
@@ -505,6 +607,30 @@ export class FirebaseService {
       }
     } catch (err) {
       console.log('[FirebaseService Web] Error finalizing voting:', err);
+    }
+  }
+
+  /**
+   * Delete committee from Cloud Firestore
+   */
+  static async deleteCommittee(committeeId) {
+    try {
+      let docRef = doc(db, 'committees', committeeId);
+      let docSnap = await getDoc(docRef);
+      if (!docSnap.exists()) {
+        const snap = await getDocs(collection(db, 'committees'));
+        for (const d of snap.docs) {
+          const cData = d.data();
+          if (d.id === committeeId || cData.id === committeeId || cData.joinCode === committeeId) {
+            docRef = doc(db, 'committees', d.id);
+            break;
+          }
+        }
+      }
+      await deleteDoc(docRef);
+      console.log('[FirebaseService Web] Deleted committee from Cloud Firestore:', committeeId);
+    } catch (err) {
+      console.log('[FirebaseService Web] Error deleting committee from cloud:', err);
     }
   }
 }

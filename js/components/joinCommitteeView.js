@@ -60,6 +60,37 @@ export function renderJoinCommitteeView(container, { initialCode = '', onBack, o
     isLoading = false;
     if (comm) {
       previewCommittee = comm;
+
+      // If user is already a member, direct immediately to the room without showing join card
+      const currentUser = authService.getCurrentUser() || storageService.getCurrentUser();
+      if (currentUser && comm.members && comm.members.length > 0) {
+        let uPhone = currentUser.phone || currentUser.verifiedPhone || currentUser.paymentNumber || '';
+        const cleanUserPhone = uPhone.replace(/[^0-9]/g, '');
+        let uName = currentUser.name || '';
+        const cleanUserName = uName.trim().toLowerCase().replace('(you)', '').trim();
+
+        const isMember = comm.members.some((m) => {
+          let mPhone = (m.phone || '').replace(/[^0-9]/g, '');
+          let mName = (m.name || '').trim().toLowerCase().replace('(you)', '').trim();
+          if (m.id === currentUser.id || m.userId === currentUser.id) {
+            return true;
+          }
+          if (cleanUserPhone && mPhone && cleanUserPhone === mPhone) {
+            return true;
+          }
+          if (cleanUserName && mName && cleanUserName === mName) {
+            return true;
+          }
+          return false;
+        });
+
+        if (isMember) {
+          if (onJoined) {
+            onJoined(comm.id);
+            return;
+          }
+        }
+      }
     } else {
       if (showToast) showToast(`No committee found with code "${cleanCode}"`);
     }

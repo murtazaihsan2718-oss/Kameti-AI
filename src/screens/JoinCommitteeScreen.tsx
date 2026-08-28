@@ -58,6 +58,10 @@ export const JoinCommitteeScreen: React.FC<JoinCommitteeScreenProps> = ({
     }
 
     const user = await nativeStorageService.getUser();
+    if (!user) {
+      Alert.alert('Sign In Required', 'Please set up your profile first.');
+      return;
+    }
     const newMember: Member = {
       id: user.id,
       name: `${user.name} (You)`,

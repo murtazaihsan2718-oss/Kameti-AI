@@ -126,7 +126,8 @@ export function renderOnboardingView(container, { onComplete, showToast }) {
     cards.forEach(card => {
       card.addEventListener('click', () => {
         selectedPayout = card.getAttribute('data-method');
-        render();
+        cards.forEach(c => c.classList.remove('active'));
+        card.classList.add('active');
       });
     });
 

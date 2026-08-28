@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, Pressable, Alert } from 'react-native';
-import { ArrowLeft, User, ArrowRight, Minus, Plus, Wallet, Copy, Users, Send } from 'lucide-react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, Pressable, Alert, Modal } from 'react-native';
+import { ArrowLeft, User, ArrowRight, Minus, Plus, Wallet, Copy, Users, Send, ChevronDown, Check, X } from 'lucide-react-native';
 import { SelectionMode, Committee } from '../types/dataTypes';
 import { nativeStorageService } from '../services/storageService';
 import { FirebaseService } from '../services/firebaseService';
@@ -13,12 +13,38 @@ interface CreateCommitteeScreenProps {
   onOpenProfile?: () => void;
 }
 
+interface DropdownOption {
+  label: string;
+  value: string;
+}
+
+const DURATION_OPTIONS: DropdownOption[] = [
+  { label: '3 Months', value: '3' },
+  { label: '4 Months', value: '4' },
+  { label: '5 Months', value: '5' },
+  { label: '6 Months', value: '6' },
+  { label: '10 Months', value: '10' },
+  { label: '12 Months', value: '12' },
+  { label: '24 Months', value: '24' },
+];
+
+const DEADLINE_OPTIONS: DropdownOption[] = [
+  { label: '1st of each month', value: '1st' },
+  { label: '5th of each month', value: '5th' },
+  { label: '10th of each month', value: '10th' },
+  { label: '15th of each month', value: '15th' },
+  { label: '20th of each month', value: '20th' },
+  { label: '25th of each month', value: '25th' },
+  { label: 'End of each month', value: 'End' },
+];
+
 export const CreateCommitteeScreen: React.FC<CreateCommitteeScreenProps> = ({ onBack, onCreated, onOpenProfile }) => {
   const [name, setName] = useState('Summer Vacation Fund');
   const [memberCount, setMemberCount] = useState(4);
   const [contribution, setContribution] = useState('250');
   const [duration, setDuration] = useState('12');
   const [deadline, setDeadline] = useState('10th');
+  const [activePicker, setActivePicker] = useState<'duration' | 'deadline' | null>(null);
   const [createdCommittee, setCreatedCommittee] = useState<Committee | null>(null);
 
   let contribNum = 0;
@@ -40,6 +66,10 @@ export const CreateCommitteeScreen: React.FC<CreateCommitteeScreenProps> = ({ on
     const joinCode = 'KMT' + Math.floor(1000 + Math.random() * 9000);
     const newId = 'c_' + Date.now();
     const user = await nativeStorageService.getUser();
+    if (!user) {
+      Alert.alert('Sign In Required', 'Please set up your profile first.');
+      return;
+    }
 
     const newCommittee: Committee = {
       id: newId,
@@ -53,13 +83,14 @@ export const CreateCommitteeScreen: React.FC<CreateCommitteeScreenProps> = ({ on
       startDate: new Date().toISOString().split('T')[0],
       currentCycle: 1,
       totalCycles: memberCount,
-      currentRecipientId: user.id,
+      duration: memberCount,
+      currentRecipientId: '',
       status: 'active',
       nextDueDate: '2026-09-01',
       members: [
         {
           id: user.id,
-          name: `${user.name} (You)`,
+          name: user.name.replace(/\s*\(you\)/i, '').trim(),
           phone: user.phone,
           avatar: 'user',
           paymentMethod: user.paymentMethod,
@@ -75,7 +106,7 @@ export const CreateCommitteeScreen: React.FC<CreateCommitteeScreenProps> = ({ on
     try {
       const currentCommittees = await nativeStorageService.getCommittees();
       await nativeStorageService.saveCommittees([newCommittee, ...currentCommittees]);
-      FirebaseService.saveCommittee(newCommittee).catch(() => {});
+      await FirebaseService.saveCommittee(newCommittee);
       setCreatedCommittee(newCommittee);
     } catch (err: any) {
       let errMsg = 'Could not create committee.';
@@ -100,6 +131,12 @@ export const CreateCommitteeScreen: React.FC<CreateCommitteeScreenProps> = ({ on
     pageTitleText = 'Committee Created!';
     pageSubtitleText = 'Share this secure link with your friends to allow them to join.';
   }
+
+  const selectedDurationObj = DURATION_OPTIONS.find(o => o.value === duration);
+  const selectedDurationLabel = selectedDurationObj ? selectedDurationObj.label : `${duration} Months`;
+
+  const selectedDeadlineObj = DEADLINE_OPTIONS.find(o => o.value === deadline);
+  const selectedDeadlineLabel = selectedDeadlineObj ? selectedDeadlineObj.label : `${deadline} of each month`;
 
   return (
     <View style={styles.container}>
@@ -252,22 +289,28 @@ export const CreateCommitteeScreen: React.FC<CreateCommitteeScreenProps> = ({ on
               </View>
             </View>
 
-            {/* DURATION (MONTHS) */}
+            {/* DURATION (MONTHS) - Auto-calculated based on participants */}
             <View style={styles.formGroup}>
               <Text style={styles.formLabel}>DURATION (MONTHS)</Text>
               <View style={styles.dropdownBox}>
-                <Text style={styles.dropdownText}>12 Months</Text>
-                <Text style={styles.dropdownArrow}>⌄</Text>
+                <Text style={styles.dropdownText}>{memberCount} Months</Text>
               </View>
             </View>
 
-            {/* MONTHLY DEPOSIT DEADLINE */}
+            {/* MONTHLY DEPOSIT DEADLINE - Interactive Tactile Dropdown */}
             <View style={styles.formGroup}>
               <Text style={styles.formLabel}>MONTHLY DEPOSIT DEADLINE</Text>
-              <View style={styles.dropdownBox}>
-                <Text style={styles.dropdownText}>10th</Text>
-                <Text style={styles.dropdownArrow}>⌄</Text>
-              </View>
+              <TactilePressable
+                style={styles.dropdownBox}
+                scaleTo={0.98}
+                haptic="selection"
+                onPress={() => {
+                  setActivePicker('deadline');
+                }}
+              >
+                <Text style={styles.dropdownText}>{selectedDeadlineLabel}</Text>
+                <ChevronDown size={18} color="#000000" strokeWidth={2.2} />
+              </TactilePressable>
             </View>
 
             <TactilePressable
@@ -284,6 +327,86 @@ export const CreateCommitteeScreen: React.FC<CreateCommitteeScreenProps> = ({ on
         )}
 
       </ScrollView>
+
+      {/* Tactile Selection Modal Sheet for Duration and Deadline */}
+      <Modal
+        visible={activePicker !== null}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          setActivePicker(null);
+        }}
+      >
+        <Pressable
+          style={styles.pickerOverlay}
+          onPress={() => {
+            setActivePicker(null);
+          }}
+        >
+          <Pressable style={styles.pickerModalCard} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.pickerHeader}>
+              <Text style={styles.pickerTitle}>
+                {activePicker === 'duration' ? 'Select Duration' : 'Select Deposit Deadline'}
+              </Text>
+              <TactilePressable
+                style={styles.pickerCloseBtn}
+                scaleTo={0.88}
+                onPress={() => {
+                  setActivePicker(null);
+                }}
+              >
+                <X size={16} color="#000000" strokeWidth={2.5} />
+              </TactilePressable>
+            </View>
+
+            <ScrollView style={styles.pickerOptionsList} showsVerticalScrollIndicator={false}>
+              {activePicker === 'duration' &&
+                DURATION_OPTIONS.map((opt) => {
+                  const isSelected = duration === opt.value;
+                  return (
+                    <TactilePressable
+                      key={opt.value}
+                      style={[styles.pickerOptionItem, isSelected && styles.pickerOptionSelected]}
+                      scaleTo={0.97}
+                      haptic="selection"
+                      onPress={() => {
+                        setDuration(opt.value);
+                        setActivePicker(null);
+                      }}
+                    >
+                      <Text style={[styles.pickerOptionText, isSelected && styles.pickerOptionTextSelected]}>
+                        {opt.label}
+                      </Text>
+                      {isSelected && <Check size={18} color="#000000" strokeWidth={3} />}
+                    </TactilePressable>
+                  );
+                })}
+
+              {activePicker === 'deadline' &&
+                DEADLINE_OPTIONS.map((opt) => {
+                  const isSelected = deadline === opt.value;
+                  return (
+                    <TactilePressable
+                      key={opt.value}
+                      style={[styles.pickerOptionItem, isSelected && styles.pickerOptionSelected]}
+                      scaleTo={0.97}
+                      haptic="selection"
+                      onPress={() => {
+                        setDeadline(opt.value);
+                        setActivePicker(null);
+                      }}
+                    >
+                      <Text style={[styles.pickerOptionText, isSelected && styles.pickerOptionTextSelected]}>
+                        {opt.label}
+                      </Text>
+                      {isSelected && <Check size={18} color="#000000" strokeWidth={3} />}
+                    </TactilePressable>
+                  );
+                })}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 };
@@ -448,17 +571,13 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     borderColor: '#E5E7EB',
-    paddingVertical: 11,
+    paddingVertical: 13,
     paddingHorizontal: 14,
   },
   dropdownText: {
     fontSize: 14,
     fontWeight: '600',
     color: '#000000',
-  },
-  dropdownArrow: {
-    fontSize: 16,
-    color: '#71717A',
   },
   createBtn: {
     backgroundColor: '#000000',
@@ -531,5 +650,71 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 6,
+  },
+  pickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  pickerModalCard: {
+    width: '100%',
+    maxWidth: 340,
+    maxHeight: 420,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 20,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  pickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  pickerTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#000000',
+  },
+  pickerCloseBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#F4F4F5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pickerOptionsList: {
+    maxHeight: 300,
+  },
+  pickerOptionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 13,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    backgroundColor: '#F4F4F5',
+    marginBottom: 8,
+  },
+  pickerOptionSelected: {
+    backgroundColor: '#E4E4E7',
+    borderWidth: 1.5,
+    borderColor: '#000000',
+  },
+  pickerOptionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#52525B',
+  },
+  pickerOptionTextSelected: {
+    fontWeight: '800',
+    color: '#000000',
   },
 });

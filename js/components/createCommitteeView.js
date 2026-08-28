@@ -101,11 +101,9 @@ export function renderCreateCommitteeView(container, { onBack, onCreated, showTo
           <!-- DURATION (MONTHS) -->
           <div class="form-group">
             <label class="form-label-uppercase">DURATION (MONTHS)</label>
-            <select id="select-comm-duration" class="form-input-pill">
-              <option value="6" ${formData.duration === 6 ? 'selected' : ''}>6 Months</option>
-              <option value="12" ${formData.duration === 12 ? 'selected' : ''}>12 Months</option>
-              <option value="24" ${formData.duration === 24 ? 'selected' : ''}>24 Months</option>
-            </select>
+            <div id="display-duration" class="form-input-pill" style="display: flex; align-items: center; background-color: #FFFFFF;">
+              <span id="display-duration-text">${formData.members} Months</span>
+            </div>
           </div>
 
           <!-- MONTHLY DEPOSIT DEADLINE -->
@@ -176,6 +174,7 @@ export function renderCreateCommitteeView(container, { onBack, onCreated, showTo
     const btnPlus = document.getElementById('btn-stepper-plus');
     const stepperVal = document.getElementById('stepper-count');
     const displayPool = document.getElementById('display-monthly-pool');
+    const displayDurationText = document.getElementById('display-duration-text');
 
     if (btnMinus) {
       btnMinus.addEventListener('click', () => {
@@ -183,6 +182,7 @@ export function renderCreateCommitteeView(container, { onBack, onCreated, showTo
           formData.members--;
           if (stepperVal) stepperVal.innerText = String(formData.members);
           if (displayPool) displayPool.innerText = formatCurrency(formData.members * formData.contribution);
+          if (displayDurationText) displayDurationText.innerText = `${formData.members} Months`;
         }
       });
     }
@@ -193,6 +193,7 @@ export function renderCreateCommitteeView(container, { onBack, onCreated, showTo
           formData.members++;
           if (stepperVal) stepperVal.innerText = String(formData.members);
           if (displayPool) displayPool.innerText = formatCurrency(formData.members * formData.contribution);
+          if (displayDurationText) displayDurationText.innerText = `${formData.members} Months`;
         }
       });
     }
@@ -203,14 +204,13 @@ export function renderCreateCommitteeView(container, { onBack, onCreated, showTo
         e.preventDefault();
         const inputName = document.getElementById('input-comm-name');
         const inputContrib = document.getElementById('input-comm-contribution');
-        const selectDuration = document.getElementById('select-comm-duration');
 
         try {
           createdCommittee = committeeService.createCommittee({
             name: inputName ? inputName.value.trim() : formData.name,
             numberOfMembers: formData.members,
             contributionAmount: inputContrib ? parseInt(inputContrib.value, 10) : formData.contribution,
-            duration: selectDuration ? parseInt(selectDuration.value, 10) : formData.duration,
+            duration: formData.members,
             startDate: formData.startDate,
             recipientSelectionMethod: formData.selectionMethod
           });

@@ -25,17 +25,29 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate, onOpenVoice 
         if (cloudList.length > 0) {
           const local = await nativeStorageService.getCommittees();
           cloudList.forEach(cc => {
-            const hasMatch = local.some(lc => {
+            const matchIdx = local.findIndex(lc => {
               if (lc.id === cc.id) {
                 return true;
               }
-              if (lc.joinCode === cc.joinCode) {
+              if (lc.joinCode && cc.joinCode && lc.joinCode.toUpperCase() === cc.joinCode.toUpperCase()) {
                 return true;
               }
               return false;
             });
 
-            if (!hasMatch) {
+            let membersList: Member[] = [];
+            if (cc.members) {
+              membersList = cc.members;
+            }
+
+            if (matchIdx >= 0) {
+              local[matchIdx] = {
+                ...local[matchIdx],
+                ...cc,
+                members: membersList,
+                memberCount: membersList.length > 0 ? membersList.length : local[matchIdx].memberCount,
+              };
+            } else {
               let memberCountVal = 5;
               if (cc.memberCount) {
                 memberCountVal = cc.memberCount;
@@ -53,7 +65,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate, onOpenVoice 
                 totalCyclesVal = cc.totalCycles;
               }
 
-              let recipientVal = 'usr_admin';
+              let recipientVal = '';
               if (cc.currentRecipientId) {
                 recipientVal = cc.currentRecipientId;
               }
@@ -76,11 +88,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate, onOpenVoice 
               let selectModeVal: SelectionMode = 'random';
               if (cc.selectionMode) {
                 selectModeVal = cc.selectionMode;
-              }
-
-              let membersList: Member[] = [];
-              if (cc.members) {
-                membersList = cc.members;
               }
 
               local.unshift({

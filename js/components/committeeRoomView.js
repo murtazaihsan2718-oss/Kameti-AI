@@ -38,6 +38,16 @@ export function renderCommitteeRoomView(container, {
     const target = cloudList.find(c => c.id === committeeId || c.joinCode === details.committee.joinCode);
 
     if (target && target.members) {
+      // Sync cloud committee directly to storageService
+      const committees = storageService.getCommittees();
+      const cIdx = committees.findIndex(c => c.id === target.id || (c.joinCode && target.joinCode && c.joinCode.toUpperCase() === target.joinCode.toUpperCase()));
+      if (cIdx >= 0) {
+        committees[cIdx] = { ...committees[cIdx], ...target };
+      } else {
+        committees.push(target);
+      }
+      storageService.setCommittees(committees);
+
       const localMembers = storageService.getMembers();
       let updated = false;
 
@@ -70,6 +80,16 @@ export function renderCommitteeRoomView(container, {
         storageService.setMembers(localMembers);
       }
 
+      // Auto pick winner if committee is full and no recipient set
+      const totalSlots = target.totalCycles || target.duration || target.memberCount || target.numberOfMembers || 5;
+      const isFull = target.members.length >= totalSlots;
+      if (isFull && !target.currentRecipientId && target.members.length > 0) {
+        const rand = Math.floor(Math.random() * target.members.length);
+        const chosen = target.members[rand];
+        const chosenId = chosen.id || chosen.userId;
+        FirebaseService.updateRecipientWinner(target.id, chosenId, 1);
+      }
+
       if (target.currentRecipientId && details.currentMonth) {
         details.currentMonth.recipientUserId = target.currentRecipientId;
       }
@@ -86,22 +106,34 @@ export function renderCommitteeRoomView(container, {
   function render() {
     const { committee, members, currentMonth, currentPayments } = details;
 
+    const totalCycles = committee.duration || committee.numberOfMembers || committee.totalCycles || 5;
+    const memberCount = members.length;
+    const isFull = memberCount >= totalCycles;
+
     let recipientUser = null;
-    if (currentMonth && currentMonth.recipientUserId) {
-      const rMem = members.find(m => m.userId === currentMonth.recipientUserId);
-      if (rMem) recipientUser = rMem.user;
-    } else if (members.length > 0) {
-      recipientUser = members[0].user;
+    if (isFull) {
+      if (committee.currentRecipientId) {
+        const rMem = members.find(m => m.userId === committee.currentRecipientId || m.id === committee.currentRecipientId || (m.user && m.user.id === committee.currentRecipientId));
+        if (rMem) recipientUser = rMem.user;
+      } else if (currentMonth && currentMonth.recipientUserId) {
+        const rMem = members.find(m => m.userId === currentMonth.recipientUserId || m.id === currentMonth.recipientUserId || (m.user && m.user.id === currentMonth.recipientUserId));
+        if (rMem) recipientUser = rMem.user;
+      }
     }
 
     const currentCycle = committee.currentCycle || 1;
-    const totalCycles = committee.duration || committee.numberOfMembers || 5;
-    const memberCount = members.length;
     const slotsRemaining = Math.max(0, totalCycles - memberCount);
-    const isFull = memberCount >= totalCycles;
-    const canDelete = memberCount < 2;
+    const canDelete = true;
     const paidMembersCount = currentPayments.filter(p => p.status === PaymentStatus.SUBMITTED || p.status === PaymentStatus.VERIFIED).length;
     const joinLink = `${window.location.origin}/join?code=${committee.joinCode}`;
+
+    const isCurrentUserRecipient = isFull && recipientUser && (user.id === recipientUser.id);
+    let rawRecName = recipientUser ? (recipientUser.name || 'Selecting Recipient...') : 'Selecting Recipient...';
+    let cleanRecName = rawRecName.replace(/\s*\(you\)/i, '').trim();
+    let displayRecipientName = cleanRecName;
+    if (isCurrentUserRecipient) {
+      displayRecipientName = `${cleanRecName} (You)`;
+    }
 
     container.innerHTML = `
       <div style="padding: 12px 20px 24px 20px;">
@@ -152,22 +184,33 @@ export function renderCommitteeRoomView(container, {
         ` : `
           <!-- Top Spotlight Card: NEXT PAYOUT -->
           <div class="card-light-gray" style="text-align: center; padding: 20px; margin-top: 4px; margin-bottom: 20px; border-radius: 20px;">
-            <div style="font-size: 10px; font-weight: 800; color: #71717A; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px;">
-              NEXT PAYOUT
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+              <div style="font-size: 10px; font-weight: 800; color: #71717A; text-transform: uppercase; letter-spacing: 0.08em;">
+                NEXT PAYOUT
+              </div>
+              <button id="btn-card-delete-committee" style="width: 28px; height: 28px; border-radius: 14px; background: #E4E4E7; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;" title="Delete Committee">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#71717A" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+              </button>
             </div>
             
             <h2 style="font-size: 20px; font-weight: 800; color: #000000; letter-spacing: -0.02em; margin-bottom: 2px;">
-              ${recipientUser ? recipientUser.name : 'Sarah Ahmed'}
+              ${displayRecipientName}
             </h2>
 
             <div style="font-size: 22px; font-weight: 800; color: #000000; letter-spacing: -0.02em; margin-bottom: 16px;">
               PKR ${committee.contributionAmount ? committee.contributionAmount.toLocaleString() : '500.00'}
             </div>
 
-            <button id="btn-submit-proof-hero" class="btn-pill-black" style="padding: 13px;">
-              <span>Submit payment proof</span>
-              <span style="font-size: 16px;">→</span>
-            </button>
+            ${isCurrentUserRecipient ? `
+              <div style="background: #E4E4E7; border-radius: 999px; padding: 12px; font-size: 13px; font-weight: 700; color: #000000; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                <span>✓ You are receiving PKR ${committee.contributionAmount ? committee.contributionAmount.toLocaleString() : '500.00'} this cycle</span>
+              </div>
+            ` : `
+              <button id="btn-submit-proof-hero" class="btn-pill-black" style="padding: 13px;">
+                <span>Submit payment proof</span>
+                <span style="font-size: 16px;">→</span>
+              </button>
+            `}
           </div>
         `}
 
@@ -187,25 +230,6 @@ export function renderCommitteeRoomView(container, {
           <div id="committee-circle-mount" style="position: relative;"></div>
         </div>
 
-        <!-- Delete Committee Button (Visible if < 2 members) -->
-        ${canDelete ? `
-          <div style="text-align: center; margin-top: 6px; margin-bottom: 16px;">
-            <button id="btn-delete-committee" style="background: #FEE2E2; color: #DC2626; border: none; border-radius: 12px; padding: 10px 18px; font-size: 13px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-              <span>Delete Committee</span>
-            </button>
-          </div>
-        ` : ''}
-
-        <!-- Spin Wheel Action (Only when full and no recipient chosen) -->
-        ${isFull && (!currentMonth || !currentMonth.recipientUserId) ? `
-          <div style="text-align: center; margin-top: 10px;">
-            <button id="btn-trigger-spin" class="btn-pill-black" style="background-color: #18181B;">
-              <span>Spin Wheel for Recipient</span>
-            </button>
-          </div>
-        ` : ''}
-
       </div>
     `;
 
@@ -215,15 +239,33 @@ export function renderCommitteeRoomView(container, {
     circleApi = renderCommitteeCircle({
       containerId: 'committee-circle-mount',
       members,
-      recipientUserId: recipientUser ? recipientUser.id : null,
+      totalSlots: totalCycles,
+      isFull,
+      recipientUserId: (isFull && recipientUser) ? recipientUser.id : null,
       payments: currentPayments,
       currentUserId: user.id,
+      currentUser: user,
       onMemberClick: (member) => openMemberDetailsModal(member),
       onSpinComplete: async () => {
-        showToast(`Recipient chosen!`);
-        reload();
+        showToast(`🎉 ${recipientUser ? recipientUser.name : 'Member'} is this cycle's recipient!`);
       }
     });
+
+    // First-time spin reveal per user/device
+    if (isFull && recipientUser && circleApi) {
+      const winnerId = recipientUser.id;
+      const spinSeenKey = 'has_seen_spin_' + details.committee.id + '_' + winnerId;
+      if (!localStorage.getItem(spinSeenKey)) {
+        localStorage.setItem(spinSeenKey, 'true');
+        const winnerIndex = members.findIndex(m => (m.userId === winnerId || (m.user && m.user.id === winnerId) || m.id === winnerId));
+        if (winnerIndex >= 0) {
+          setTimeout(() => {
+            showToast(`🎉 ${recipientUser.name} was chosen as the recipient!`);
+            circleApi.spinTo(winnerIndex);
+          }, 350);
+        }
+      }
+    }
   }
 
   // 1-to-1 Profile Popup Modal (Reference Design Image 4)
@@ -231,6 +273,141 @@ export function renderCommitteeRoomView(container, {
     const overlay = document.getElementById('modal-overlay');
     const sheet = document.getElementById('modal-sheet-content');
     if (!overlay || !sheet) return;
+
+    const memberUser = member.user || {};
+    const memberId = member.userId || member.id;
+    const { committee, currentMonth } = details;
+    const isFull = (details.members || []).length >= (committee.duration || committee.numberOfMembers || committee.totalCycles || 5);
+
+    let recipientUserId = null;
+    if (isFull) {
+      if (committee.currentRecipientId) {
+        recipientUserId = committee.currentRecipientId;
+      } else if (currentMonth && currentMonth.recipientUserId) {
+        recipientUserId = currentMonth.recipientUserId;
+      } else if (details.members.length > 0) {
+        recipientUserId = details.members[0].userId;
+      }
+    }
+
+    const isSelectedMemberRecipient = isFull && recipientUserId && (memberId === recipientUserId);
+
+    // Check payment status and proof
+    const proofs = storageService.getProofs ? storageService.getProofs() : [];
+    const memberProof = proofs.find(p => p.uploadedBy === memberId || (p.paymentId && p.paymentId.includes(memberId))) || null;
+    const proofUrl = member.paymentProofUrl || (memberProof ? memberProof.fileUrl : null);
+
+    const payments = storageService.getPayments ? storageService.getPayments() : [];
+    const payment = payments.find(p => p.payerUserId === memberId) || null;
+
+    let isVerified = false;
+    let isSubmitted = false;
+    let statusText = 'Pending Payment';
+
+    if (isSelectedMemberRecipient) {
+      statusText = 'Recipient';
+    } else if (member.paymentStatus === 'verified' || (payment && payment.status === PaymentStatus.VERIFIED)) {
+      isVerified = true;
+      statusText = 'Paid ✓';
+    } else if (member.paymentStatus === 'submitted' || proofUrl || (payment && payment.status === PaymentStatus.SUBMITTED)) {
+      isSubmitted = true;
+      statusText = 'Submitted';
+    } else {
+      statusText = isFull ? 'Pending' : 'Joined';
+    }
+
+    // Check if the current logged-in user is strictly the cycle recipient
+    let isRecipient = false;
+    if (isFull && recipientUserId && user) {
+      let rawUserPhone = user.phone;
+      if (!rawUserPhone) {
+        rawUserPhone = user.verifiedPhone;
+      }
+      if (!rawUserPhone) {
+        rawUserPhone = user.paymentNumber;
+      }
+      if (!rawUserPhone) {
+        rawUserPhone = '';
+      }
+      const cleanUserPhone = rawUserPhone.replace(/[^0-9]/g, '');
+
+      const rMember = (details.members || []).find(m => m.userId === recipientUserId || m.id === recipientUserId || (m.user && m.user.id === recipientUserId));
+      let rUser = null;
+      if (rMember) {
+        if (rMember.user) {
+          rUser = rMember.user;
+        } else {
+          rUser = rMember;
+        }
+      }
+
+      let rawRecPhone = '';
+      if (rUser) {
+        if (rUser.phone) {
+          rawRecPhone = rUser.phone;
+        } else if (rUser.verifiedPhone) {
+          rawRecPhone = rUser.verifiedPhone;
+        } else if (rUser.paymentNumber) {
+          rawRecPhone = rUser.paymentNumber;
+        }
+      }
+      const cleanRecipientPhone = rawRecPhone.replace(/[^0-9]/g, '');
+
+      let rawUserName = user.name || '';
+      const cleanUserName = rawUserName.trim().toLowerCase().replace('(you)', '').trim();
+
+      let rawRecName = '';
+      if (rUser && rUser.name) {
+        rawRecName = rUser.name;
+      }
+      const cleanRecipientName = rawRecName.trim().toLowerCase().replace('(you)', '').trim();
+
+      if (user.id === recipientUserId) {
+        isRecipient = true;
+      } else if (cleanUserPhone && cleanRecipientPhone && cleanUserPhone === cleanRecipientPhone) {
+        isRecipient = true;
+      } else if (cleanUserName && cleanRecipientName && cleanUserName === cleanRecipientName) {
+        isRecipient = true;
+      }
+    }
+
+    // ONLY the recipient can verify
+    const canVerify = isFull && isRecipient && !isSelectedMemberRecipient && !isVerified;
+    const requiresProofInspection = !!proofUrl;
+
+    let rawMemName = memberUser.name || member.name || 'Member';
+    let cleanMemName = rawMemName.replace(/\s*\(you\)/i, '').trim();
+
+    let isSelectedMemberMe = false;
+    if (user) {
+      let rawUserPhone = user.phone;
+      if (!rawUserPhone) rawUserPhone = user.verifiedPhone;
+      if (!rawUserPhone) rawUserPhone = user.paymentNumber;
+      if (!rawUserPhone) rawUserPhone = '';
+      let cleanUserPhone = rawUserPhone.replace(/[^0-9]/g, '');
+
+      let rawMemPhone = memberUser.phone;
+      if (!rawMemPhone) rawMemPhone = memberUser.verifiedPhone;
+      if (!rawMemPhone) rawMemPhone = memberUser.paymentNumber;
+      if (!rawMemPhone) rawMemPhone = member.phone;
+      if (!rawMemPhone) rawMemPhone = '';
+      let cleanMemPhone = rawMemPhone.replace(/[^0-9]/g, '');
+
+      let cleanUserName = (user.name || '').trim().toLowerCase().replace('(you)', '').trim();
+
+      if (user.id === memberId || (user.userId && user.userId === memberId)) {
+        isSelectedMemberMe = true;
+      } else if (cleanUserPhone && cleanMemPhone && cleanUserPhone === cleanMemPhone) {
+        isSelectedMemberMe = true;
+      } else if (cleanUserName && cleanMemName.toLowerCase() === cleanUserName) {
+        isSelectedMemberMe = true;
+      }
+    }
+
+    let displayMemberName = cleanMemName;
+    if (isSelectedMemberMe) {
+      displayMemberName = `${cleanMemName} (You)`;
+    }
 
     sheet.innerHTML = `
       <div style="position: relative; text-align: center; padding-top: 8px;">
@@ -240,45 +417,75 @@ export function renderCommitteeRoomView(container, {
           ✕
         </button>
 
-        <!-- Avatar Circle with Clean SVG Icon -->
-        <div style="width: 72px; height: 72px; border-radius: 50%; background-color: #F4F4F5; display: flex; align-items: center; justify-content: center; margin: 8px auto 14px auto;">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#71717A" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+        <!-- Avatar Circle -->
+        <div style="width: 60px; height: 60px; border-radius: 50%; background-color: #F4F4F5; display: flex; align-items: center; justify-content: center; margin: 4px auto 10px auto;">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#71717A" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
         </div>
 
         <!-- Name & Account -->
-        <h2 style="font-size: 22px; font-weight: 800; color: #000000; margin-bottom: 2px;">
-          ${member.user ? member.user.name : 'Sarah Ahmed'}
+        <h2 style="font-size: 20px; font-weight: 800; color: #000000; margin-bottom: 2px;">
+          ${displayMemberName}
         </h2>
-        <p style="font-size: 13.5px; color: #71717A; font-weight: 600; margin-bottom: 20px;">
-          ${member.user ? member.user.paymentNumber : '03XX XXXXXXX'}
+        <p style="font-size: 13px; color: #71717A; font-weight: 600; margin-bottom: 16px;">
+          ${memberUser.paymentNumber || memberUser.verifiedPhone || '03XX XXXXXXX'}
         </p>
 
-        <!-- Info Cards (Preferred Payout & Payment Status) -->
-        <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px;">
+        <!-- Info Cards -->
+        <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px;">
           
-          <div style="background-color: #F4F4F5; border-radius: 16px; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between;">
-            <div style="display: flex; align-items: center; gap: 10px;">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="3"></rect><path d="M6 12h12"></path></svg>
-              <span style="font-size: 11px; font-weight: 800; color: #71717A; text-transform: uppercase; letter-spacing: 0.08em;">PREFERRED PAYOUT</span>
+          <div style="background-color: #F4F4F5; border-radius: 14px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="3"></rect><path d="M6 12h12"></path></svg>
+              <span style="font-size: 10px; font-weight: 800; color: #71717A; text-transform: uppercase; letter-spacing: 0.08em;">PREFERRED PAYOUT</span>
             </div>
-            <span style="font-size: 14px; font-weight: 700; color: #000000;">
-              ${member.user ? member.user.paymentMethod : 'EasyPaisa'}
+            <span style="font-size: 13.5px; font-weight: 700; color: #000000;">
+              ${memberUser.paymentMethod || 'EasyPaisa'}
             </span>
           </div>
 
-          <div style="background-color: #F4F4F5; border-radius: 16px; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between;">
-            <div style="display: flex; align-items: center; gap: 10px;">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
-              <span style="font-size: 11px; font-weight: 800; color: #71717A; text-transform: uppercase; letter-spacing: 0.08em;">PAYMENT STATUS</span>
+          <div style="background-color: #F4F4F5; border-radius: 14px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <span style="font-size: 10px; font-weight: 800; color: #71717A; text-transform: uppercase; letter-spacing: 0.08em;">PAYMENT STATUS</span>
             </div>
-            <span style="font-size: 14px; font-weight: 700; color: #000000;">
-              Paid
+            <span style="font-size: 13.5px; font-weight: 700; color: #000000; text-align: right; flex-shrink: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+              ${statusText}
             </span>
           </div>
 
         </div>
 
-        <button id="btn-close-modal-action" class="btn-pill-black">
+        <!-- Payment Proof Screenshot Box -->
+        ${isSelectedMemberRecipient ? `
+          <div style="background-color: #F4F4F5; border-radius: 12px; padding: 12px; margin-bottom: 16px; font-size: 12px; color: #52525B; font-weight: 600; text-align: center;">
+            ${memberUser.name || 'Member'} is receiving the payout this cycle — no contribution payment required.
+          </div>
+        ` : `
+          <div style="text-align: left; margin-bottom: 16px;">
+            <div style="font-size: 10px; font-weight: 800; color: #71717A; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px;">ATTACHED PAYMENT PROOF</div>
+            ${proofUrl ? `
+              <div id="proof-thumbnail-card" style="background-color: #F4F4F5; border-radius: 14px; overflow: hidden; border: 1px solid #E4E4E7; cursor: pointer;">
+                <img src="${proofUrl}" alt="Payment Proof" style="width: 100%; height: 100px; object-fit: cover; display: block;" />
+                <div style="background: #FFFFFF; padding: 6px; text-align: center; font-size: 11px; font-weight: 700; color: #000000; border-top: 1px solid #E4E4E7;">
+                  🔍 Click to view full screenshot
+                </div>
+              </div>
+            ` : `
+              <div style="background-color: #F4F4F5; border-radius: 12px; padding: 14px; text-align: center; font-size: 12px; color: #71717A; font-weight: 500;">
+                No payment receipt uploaded yet
+              </div>
+            `}
+          </div>
+        `}
+
+        ${canVerify ? `
+          <button id="btn-verify-member-payment" class="btn-pill-black" style="margin-bottom: 8px; ${requiresProofInspection ? 'opacity: 0.45; cursor: not-allowed;' : ''}" ${requiresProofInspection ? 'disabled' : ''}>
+            <span id="btn-verify-member-text">${requiresProofInspection ? 'View screenshot to enable verification' : 'Verify & Mark as Paid'}</span>
+            <span style="font-size: 16px;">✓</span>
+          </button>
+        ` : ''}
+
+        <button id="btn-close-modal-action" class="btn-pill-black" style="background-color: #F4F4F5; color: #000000;">
           Close
         </button>
 
@@ -287,8 +494,70 @@ export function renderCommitteeRoomView(container, {
 
     const closeBtn = document.getElementById('btn-close-modal-x');
     const actionBtn = document.getElementById('btn-close-modal-action');
+    const verifyBtn = document.getElementById('btn-verify-member-payment');
+    const proofCard = document.getElementById('proof-thumbnail-card');
+
+    if (proofCard && proofUrl) {
+      proofCard.addEventListener('click', () => {
+        // In-app full screen image inspection modal
+        const fullModal = document.createElement('div');
+        fullModal.id = 'web-fullscreen-receipt';
+        fullModal.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.92); z-index: 99999; display: flex; align-items: center; justify-content: center; padding: 20px;';
+        fullModal.innerHTML = `
+          <button id="btn-close-full-receipt" style="position: absolute; top: 20px; right: 20px; width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.25); border: none; color: #FFF; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center;">✕</button>
+          <img src="${proofUrl}" alt="Full Screenshot Receipt" style="max-width: 100%; max-height: 85vh; border-radius: 12px; object-fit: contain;" />
+        `;
+        document.body.appendChild(fullModal);
+
+        const closeFull = () => {
+          if (document.body.contains(fullModal)) document.body.removeChild(fullModal);
+        };
+        fullModal.addEventListener('click', (e) => {
+          if (e.target === fullModal || e.target.id === 'btn-close-full-receipt') closeFull();
+        });
+
+        if (verifyBtn) {
+          verifyBtn.removeAttribute('disabled');
+          verifyBtn.style.opacity = '1';
+          verifyBtn.style.cursor = 'pointer';
+          const btnText = document.getElementById('btn-verify-member-text');
+          if (btnText) btnText.innerText = 'Verify & Mark as Paid';
+        }
+      });
+    }
+
     if (closeBtn) closeBtn.addEventListener('click', () => overlay.classList.remove('open'));
     if (actionBtn) actionBtn.addEventListener('click', () => overlay.classList.remove('open'));
+
+    if (verifyBtn) {
+      verifyBtn.addEventListener('click', async () => {
+        try {
+          overlay.classList.remove('open');
+          showToast(`Verified ${memberUser.name || 'Member'}'s payment ✓`);
+
+          const payments = storageService.getPayments ? storageService.getPayments() : [];
+          let p = payments.find(pay => pay.payerUserId === memberId);
+          if (p) {
+            p.status = PaymentStatus.VERIFIED;
+            p.verifiedAt = new Date().toISOString();
+          } else {
+            payments.push({
+              id: 'pay_' + committeeId + '_' + memberId,
+              committeeId,
+              payerUserId: memberId,
+              amount: 20000,
+              status: PaymentStatus.VERIFIED,
+              verifiedAt: new Date().toISOString(),
+            });
+          }
+          storageService.setPayments(payments);
+          await FirebaseService.verifyMemberPayment(committeeId, memberId);
+          reload();
+        } catch (err) {
+          showToast('Could not verify payment');
+        }
+      });
+    }
 
     overlay.classList.add('open');
   }
@@ -348,34 +617,68 @@ export function renderCommitteeRoomView(container, {
       });
     }
 
-    // Delete Committee
-    const btnDelete = document.getElementById('btn-delete-committee');
-    if (btnDelete) {
-      btnDelete.addEventListener('click', async () => {
-        if (confirm(`Are you sure you want to delete "${details.committee.name}"? This action cannot be undone.`)) {
+    // Custom Themed Delete Committee Modal
+    function openDeleteConfirmModal() {
+      const overlay = document.getElementById('modal-overlay');
+      const sheet = document.getElementById('modal-sheet-content');
+      if (!overlay || !sheet) return;
+
+      sheet.innerHTML = `
+        <div style="text-align: center; padding: 12px 6px;">
+          <div style="width: 52px; height: 52px; border-radius: 26px; background-color: #FEE2E2; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px auto;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="2.2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+          </div>
+
+          <h2 style="font-size: 19px; font-weight: 800; color: #000000; margin-bottom: 8px;">
+            Delete Committee?
+          </h2>
+
+          <p style="font-size: 13.5px; color: #71717A; line-height: 1.45; margin-bottom: 24px;">
+            Are you sure you want to delete "${details.committee.name}"? All member records and payment history will be permanently removed.
+          </p>
+
+          <button id="btn-confirm-delete-action" class="btn-pill-black" style="background-color: #DC2626; color: #FFFFFF; margin-bottom: 10px;">
+            <span>Delete Committee</span>
+            <span style="font-size: 16px;">✕</span>
+          </button>
+
+          <button id="btn-cancel-delete-action" class="btn-pill-black" style="background-color: #F4F4F5; color: #000000;">
+            Cancel
+          </button>
+        </div>
+      `;
+
+      const btnConfirm = sheet.querySelector('#btn-confirm-delete-action');
+      const btnCancel = sheet.querySelector('#btn-cancel-delete-action');
+
+      if (btnCancel) {
+        btnCancel.addEventListener('click', () => {
+          overlay.classList.remove('open');
+        });
+      }
+
+      if (btnConfirm) {
+        btnConfirm.addEventListener('click', async () => {
+          overlay.classList.remove('open');
           const comId = details.committee.id;
           const comms = storageService.getCommittees().filter(c => c.id !== comId);
           storageService.setCommittees(comms);
-          await FirebaseService.deleteCommittee(comId);
-          showToast(`"${details.committee.name}" deleted`);
+          sessionStorage.removeItem('active_room_id');
+          localStorage.removeItem('active_room_id');
           if (cloudUnsubscribe) cloudUnsubscribe();
           onBack();
-        }
-      });
+          showToast(`"${details.committee.name}" deleted`);
+          await FirebaseService.deleteCommittee(comId);
+        });
+      }
+
+      overlay.classList.add('open');
     }
 
     const btnCardDelete = document.getElementById('btn-card-delete-committee');
     if (btnCardDelete) {
-      btnCardDelete.addEventListener('click', async () => {
-        if (confirm(`Are you sure you want to delete "${details.committee.name}"? This action cannot be undone.`)) {
-          const comId = details.committee.id;
-          const comms = storageService.getCommittees().filter(c => c.id !== comId);
-          storageService.setCommittees(comms);
-          await FirebaseService.deleteCommittee(comId);
-          showToast(`"${details.committee.name}" deleted`);
-          if (cloudUnsubscribe) cloudUnsubscribe();
-          onBack();
-        }
+      btnCardDelete.addEventListener('click', () => {
+        openDeleteConfirmModal();
       });
     }
 

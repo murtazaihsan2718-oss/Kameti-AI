@@ -92,10 +92,14 @@ class NativeStorageService {
   async init() {
     try {
       const userStr = await AsyncStorage.getItem(STORAGE_KEYS.USER);
-      if (!userStr) {
-        await AsyncStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(SEED_USER));
-        await AsyncStorage.setItem(STORAGE_KEYS.COMMITTEES, JSON.stringify(SEED_COMMITTEES));
-        await AsyncStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(SEED_NOTIFICATIONS));
+      // If user is not set, init empty storage
+      const comStr = await AsyncStorage.getItem(STORAGE_KEYS.COMMITTEES);
+      if (!comStr) {
+        await AsyncStorage.setItem(STORAGE_KEYS.COMMITTEES, JSON.stringify([]));
+      }
+      const notifStr = await AsyncStorage.getItem(STORAGE_KEYS.NOTIFICATIONS);
+      if (!notifStr) {
+        await AsyncStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify([]));
       }
     } catch (err) {
       console.error('[StorageService] Error initializing:', err);
@@ -113,13 +117,20 @@ class NativeStorageService {
     this.listeners.forEach(l => l());
   }
 
-  async getUser(): Promise<UserProfile> {
+  async getUser(): Promise<UserProfile | null> {
     const data = await AsyncStorage.getItem(STORAGE_KEYS.USER);
-    return data ? JSON.parse(data) : SEED_USER;
+    return data ? JSON.parse(data) : null;
+  }
+
+  async login(user: UserProfile) {
+    await AsyncStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(user));
+    this.notify();
+    return user;
   }
 
   async updateUser(user: Partial<UserProfile>) {
     const current = await this.getUser();
+    if (!current) return null;
     const updated = { ...current, ...user };
     await AsyncStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(updated));
     this.notify();
@@ -128,7 +139,7 @@ class NativeStorageService {
 
   async getCommittees(): Promise<Committee[]> {
     const data = await AsyncStorage.getItem(STORAGE_KEYS.COMMITTEES);
-    return data ? JSON.parse(data) : SEED_COMMITTEES;
+    return data ? JSON.parse(data) : [];
   }
 
   async saveCommittees(committees: Committee[]) {
@@ -143,14 +154,88 @@ class NativeStorageService {
     return filtered;
   }
 
+  async submitMemberProof(committeeId: string, memberId: string, proofUrl: string, notes?: string) {
+    const list = await this.getCommittees();
+    const updated = list.map(c => {
+      if (c.id === committeeId) {
+        let members = c.members;
+        if (members) {
+          members = members.map(m => {
+            if (m.id === memberId) {
+              return {
+                ...m,
+                paymentProofUrl: proofUrl,
+                paymentStatus: 'submitted' as const,
+                submittedAt: new Date().toISOString(),
+                paymentNotes: notes || '',
+              };
+            }
+            return m;
+          });
+        }
+        return { ...c, members };
+      }
+      return c;
+    });
+
+    await this.saveCommittees(updated);
+    return updated;
+  }
+
+  async verifyMemberPayment(committeeId: string, memberId: string) {
+    const list = await this.getCommittees();
+    const updated = list.map(c => {
+      if (c.id === committeeId) {
+        let members = c.members;
+        if (members) {
+          members = members.map(m => {
+            if (m.id === memberId) {
+              return {
+                ...m,
+                paymentStatus: 'verified' as const,
+                verifiedAt: new Date().toISOString(),
+              };
+            }
+            return m;
+          });
+        }
+        return { ...c, members };
+      }
+      return c;
+    });
+
+    await this.saveCommittees(updated);
+    return updated;
+  }
+
   async getNotifications(): Promise<AppNotification[]> {
     const data = await AsyncStorage.getItem(STORAGE_KEYS.NOTIFICATIONS);
     return data ? JSON.parse(data) : SEED_NOTIFICATIONS;
   }
 
-  async saveNotifications(notifs: AppNotification[]) {
-    await AsyncStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(notifs));
-    this.notify();
+  async getItem(key: string): Promise<string | null> {
+    try {
+      return await AsyncStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  }
+
+  async setItem(key: string, value: string): Promise<void> {
+    try {
+      await AsyncStorage.setItem(key, value);
+    } catch {}
+  }
+
+  async logout(): Promise<void> {
+    try {
+      await AsyncStorage.removeItem(STORAGE_KEYS.USER);
+      await AsyncStorage.removeItem(STORAGE_KEYS.COMMITTEES);
+      await AsyncStorage.removeItem(STORAGE_KEYS.NOTIFICATIONS);
+      this.notify();
+    } catch (err) {
+      console.error('[StorageService] Error logging out:', err);
+    }
   }
 }
 

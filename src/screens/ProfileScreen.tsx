@@ -1,39 +1,66 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, Alert } from 'react-native';
-import { ArrowLeft, User, Phone, CreditCard, Save } from 'lucide-react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, TextInput, Alert, Modal, Animated } from 'react-native';
+import { ArrowLeft, User, Phone, CreditCard, Save, LogOut } from 'lucide-react-native';
 import { UserProfile, PaymentMethod } from '../types/dataTypes';
 import { nativeStorageService } from '../services/storageService';
 import { TactilePressable } from '../components/TactilePressable';
 
 interface ProfileScreenProps {
   onBack?: () => void;
+  onLogout?: () => void;
 }
 
-export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBack }) => {
+export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBack, onLogout }) => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('easypaisa');
   const [accountNumber, setAccountNumber] = useState('');
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
+  const modalScale = useRef(new Animated.Value(0.85)).current;
+  const modalOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     loadUser();
   }, []);
 
+  useEffect(() => {
+    if (showLogoutConfirm) {
+      modalScale.setValue(0.82);
+      modalOpacity.setValue(0);
+      Animated.parallel([
+        Animated.spring(modalScale, {
+          toValue: 1,
+          useNativeDriver: true,
+          speed: 38,
+          bounciness: 7,
+        }),
+        Animated.timing(modalOpacity, {
+          toValue: 1,
+          duration: 120,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [showLogoutConfirm]);
+
   const loadUser = async () => {
     const data = await nativeStorageService.getUser();
     setUser(data);
-    if (data.name) {
-      setName(data.name);
-    }
-    if (data.phone) {
-      setPhone(data.phone);
-    }
-    if (data.paymentMethod) {
-      setPaymentMethod(data.paymentMethod);
-    }
-    if (data.accountNumber) {
-      setAccountNumber(data.accountNumber);
+    if (data) {
+      if (data.name) {
+        setName(data.name);
+      }
+      if (data.phone) {
+        setPhone(data.phone);
+      }
+      if (data.paymentMethod) {
+        setPaymentMethod(data.paymentMethod);
+      }
+      if (data.accountNumber) {
+        setAccountNumber(data.accountNumber);
+      }
     }
   };
 
@@ -48,6 +75,37 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBack }) => {
       accountNumber,
     });
     Alert.alert('Profile Saved', 'Your payment account details were updated.');
+  };
+
+  const closeLogoutModal = (callback?: () => void) => {
+    Animated.parallel([
+      Animated.timing(modalScale, {
+        toValue: 0.88,
+        duration: 90,
+        useNativeDriver: true,
+      }),
+      Animated.timing(modalOpacity, {
+        toValue: 0,
+        duration: 90,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setShowLogoutConfirm(false);
+      if (callback) {
+        callback();
+      }
+    });
+  };
+
+  const confirmLogout = async () => {
+    closeLogoutModal(async () => {
+      await nativeStorageService.logout();
+      if (onLogout) {
+        onLogout();
+      } else if (onBack) {
+        onBack();
+      }
+    });
   };
 
   if (!user) {
@@ -139,6 +197,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBack }) => {
             </View>
           </View>
 
+          {/* Save Details Button */}
           <TactilePressable
             style={styles.saveBtn}
             haptic="success"
@@ -148,9 +207,68 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBack }) => {
             <Save size={16} color="#FFFFFF" strokeWidth={2.2} style={{ marginRight: 6 }} />
             <Text style={styles.saveBtnText}>Save Details</Text>
           </TactilePressable>
+
+          {/* Red Log Out Button */}
+          <TactilePressable
+            style={styles.logoutBtn}
+            haptic="selection"
+            scaleTo={0.97}
+            onPress={() => {
+              setShowLogoutConfirm(true);
+            }}
+          >
+            <LogOut size={16} color="#FFFFFF" strokeWidth={2.2} style={{ marginRight: 6 }} />
+            <Text style={styles.logoutBtnText}>Log Out</Text>
+          </TactilePressable>
         </View>
 
       </ScrollView>
+
+      {/* Custom Themed Log Out Confirmation Modal */}
+      <Modal
+        visible={showLogoutConfirm}
+        transparent={true}
+        animationType="none"
+        onRequestClose={() => closeLogoutModal()}
+      >
+        <Animated.View style={[styles.confirmModalOverlay, { opacity: modalOpacity }]}>
+          <Animated.View
+            style={[
+              styles.confirmModalCard,
+              {
+                opacity: modalOpacity,
+                transform: [{ scale: modalScale }],
+              },
+            ]}
+          >
+            <View style={styles.logoutIconCircleLarge}>
+              <LogOut size={24} color="#DC2626" strokeWidth={2.2} />
+            </View>
+            <Text style={styles.confirmModalTitle}>Log Out?</Text>
+            <Text style={styles.confirmModalSubtitle}>
+              Are you sure you want to log out of your Kameti AI account?
+            </Text>
+
+            <TactilePressable
+              style={styles.confirmLogoutBtn}
+              haptic="impactHeavy"
+              scaleTo={0.96}
+              onPress={confirmLogout}
+            >
+              <Text style={styles.confirmLogoutBtnText}>Log Out</Text>
+            </TactilePressable>
+
+            <TactilePressable
+              style={styles.confirmCancelBtn}
+              haptic="selection"
+              scaleTo={0.96}
+              onPress={() => closeLogoutModal()}
+            >
+              <Text style={styles.confirmCancelBtnText}>Cancel</Text>
+            </TactilePressable>
+          </Animated.View>
+        </Animated.View>
+      </Modal>
     </View>
   );
 };
@@ -251,10 +369,104 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 4,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   saveBtnText: {
     color: '#FFFFFF',
     fontSize: 14,
+    fontWeight: '700',
+  },
+  logoutBtn: {
+    backgroundColor: '#DC2626',
+    borderRadius: 9999,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+    shadowColor: '#DC2626',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  logoutBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  confirmModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  confirmModalCard: {
+    width: '100%',
+    maxWidth: 320,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  logoutIconCircleLarge: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  confirmModalTitle: {
+    fontSize: 18.5,
+    fontWeight: '800',
+    color: '#000000',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  confirmModalSubtitle: {
+    fontSize: 13,
+    color: '#71717A',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 20,
+  },
+  confirmLogoutBtn: {
+    width: '100%',
+    backgroundColor: '#DC2626',
+    borderRadius: 9999,
+    paddingVertical: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  confirmLogoutBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  confirmCancelBtn: {
+    width: '100%',
+    backgroundColor: '#F4F4F5',
+    borderRadius: 9999,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmCancelBtnText: {
+    color: '#000000',
+    fontSize: 13.5,
     fontWeight: '700',
   },
 });

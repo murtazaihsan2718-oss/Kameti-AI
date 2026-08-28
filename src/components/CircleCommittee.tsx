@@ -1,13 +1,17 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Dimensions, Animated, Easing } from 'react-native';
-import { RefreshCw, Star, Check, Clock, Plus } from 'lucide-react-native';
+import { RefreshCw, Star, Check, Clock, Plus, FileText } from 'lucide-react-native';
 import { Committee, Member } from '../types/dataTypes';
 import { TactilePressable } from './TactilePressable';
 
 interface CircleCommitteeProps {
   committee: Committee;
+  currentUserId?: string;
+  currentUserPhone?: string;
+  currentUserName?: string;
   onMemberPress: (member: Member) => void;
-  onSpinPress?: () => void;
+  shouldAnimateSpin?: boolean;
+  onSpinComplete?: () => void;
 }
 
 const { width } = Dimensions.get('window');
@@ -17,11 +21,22 @@ const CENTER = CIRCLE_SIZE / 2;
 
 export const CircleCommittee: React.FC<CircleCommitteeProps> = ({
   committee,
+  currentUserId,
+  currentUserPhone,
+  currentUserName,
   onMemberPress,
-  onSpinPress,
+  shouldAnimateSpin,
+  onSpinComplete,
 }) => {
   const [isSpinning, setIsSpinning] = useState(false);
   const spinAnim = useRef(new Animated.Value(0)).current;
+  const wheelAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (shouldAnimateSpin && !isSpinning) {
+      runSpinAnimation();
+    }
+  }, [shouldAnimateSpin]);
 
   let members: Member[] = [];
   if (committee.members) {
@@ -33,6 +48,8 @@ export const CircleCommittee: React.FC<CircleCommitteeProps> = ({
   let totalSlots = 5;
   if (committee.memberCount) {
     totalSlots = committee.memberCount;
+  } else if (committee.numberOfMembers) {
+    totalSlots = committee.numberOfMembers;
   } else if (committee.totalCycles) {
     totalSlots = committee.totalCycles;
   } else if (committee.duration) {
@@ -48,32 +65,50 @@ export const CircleCommittee: React.FC<CircleCommitteeProps> = ({
   if (isFull) {
     if (committee.currentRecipientId) {
       currentRecipientId = committee.currentRecipientId;
-    } else if (members[0]) {
-      currentRecipientId = members[0].id;
     }
   }
 
-  const handleCenterSpin = () => {
-    if (isSpinning || !isFull) {
-      return;
+  // Find index of recipient so that the recipient is ALWAYS aligned directly under the top arrow (12 o'clock)
+  let recipientIndex = 0;
+  if (isFull && currentRecipientId) {
+    const foundIdx = members.findIndex(m => m.id === currentRecipientId || m.userId === currentRecipientId);
+    if (foundIdx >= 0) {
+      recipientIndex = foundIdx;
     }
+  }
 
+  const runSpinAnimation = () => {
     setIsSpinning(true);
     spinAnim.setValue(0);
-    Animated.timing(spinAnim, {
-      toValue: 1,
-      duration: 1800,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start(() => {
+    wheelAnim.setValue(0);
+
+    Animated.parallel([
+      Animated.timing(spinAnim, {
+        toValue: 1,
+        duration: 2400,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(wheelAnim, {
+        toValue: 1,
+        duration: 2400,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
       setIsSpinning(false);
-      if (onSpinPress) {
-        onSpinPress();
+      if (onSpinComplete) {
+        onSpinComplete();
       }
     });
   };
 
   const spinRotation = spinAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '1080deg'],
+  });
+
+  const wheelRotation = wheelAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ['0deg', '1080deg'],
   });
@@ -89,22 +124,19 @@ export const CircleCommittee: React.FC<CircleCommitteeProps> = ({
     displayNodes.push({ type: 'empty', slotNumber: members.length + i + 1 });
   }
 
+  const totalDisplaySlots = Math.max(displayNodes.length, 1);
+
   return (
     <View style={styles.container}>
       <View style={[styles.circleContainer, { width: CIRCLE_SIZE, height: CIRCLE_SIZE }]}>
         
-        {/* Center Node - Spin Wheel (Full) or Waiting Indicator (Forming) */}
+        {/* Center Node - Visual Indicator (Non-clickable, no manual spin) */}
         {isFull ? (
-          <TactilePressable
-            scaleTo={0.9}
-            containerStyle={{ position: 'absolute', left: CENTER - 42, top: CENTER - 42, width: 84, height: 84, zIndex: 5 }}
-            style={styles.centerRefreshCircle}
-            onPress={handleCenterSpin}
-          >
+          <View style={styles.centerRefreshCircle}>
             <Animated.View style={{ transform: [{ rotate: spinRotation }] }}>
               <RefreshCw size={22} color="#000000" strokeWidth={2.2} />
             </Animated.View>
-          </TactilePressable>
+          </View>
         ) : (
           <View style={styles.centerWaitingCircle}>
             <Clock size={20} color="#71717A" strokeWidth={2} />
@@ -112,98 +144,135 @@ export const CircleCommittee: React.FC<CircleCommitteeProps> = ({
           </View>
         )}
 
-        {/* Member Nodes and Open Slot Placeholders Arranged in Circle */}
-        {displayNodes.map((node, index) => {
-          const angle = (index * 2 * Math.PI) / displayNodes.length - Math.PI / 2;
-          const x = CENTER + RADIUS * Math.cos(angle) - 24;
-          const y = CENTER + RADIUS * Math.sin(angle) - 24;
+        {/* Member Nodes Arranged in Circle - Recipient node is mathematically anchored at 12 o'clock under ▼ */}
+        <Animated.View style={[{ width: '100%', height: '100%', position: 'absolute' }, { transform: [{ rotate: wheelRotation }] }]}>
+          {displayNodes.map((node, index) => {
+            // Anchor recipient at -PI/2 (top 12 o'clock, directly under the black arrow)
+            const angle = ((index - recipientIndex) * 2 * Math.PI) / totalDisplaySlots - Math.PI / 2;
+            const x = CENTER + RADIUS * Math.cos(angle) - 24;
+            const y = CENTER + RADIUS * Math.sin(angle) - 24;
 
-          if (node.type === 'empty') {
-            return (
-              <View
-                key={`empty-${index}`}
-                style={[styles.nodeEmpty, { left: x, top: y }]}
-              >
-                <Plus size={14} color="#A1A1AA" strokeWidth={2} />
-              </View>
-            );
-          }
-
-          const member = node.member!;
-          let isRecipient = false;
-          if (isFull && member.id === currentRecipientId) {
-            isRecipient = true;
-          }
-
-          let isPaid = false;
-          if (isFull && !isRecipient) {
-            if (index % 2 === 1) {
-              isPaid = true;
-            }
-          }
-
-          let initial = 'M';
-          if (member.name) {
-            initial = member.name[0].toUpperCase();
-          }
-
-          if (isRecipient) {
-            return (
-              <TactilePressable
-                key={member.id}
-                scaleTo={0.88}
-                containerStyle={{ position: 'absolute', left: x, top: y, width: 48, height: 48, zIndex: 10 }}
-                style={styles.nodeRecipient}
-                onPress={() => {
-                  onMemberPress(member);
-                }}
-              >
-                <Text style={styles.recipientInitial}>{initial}</Text>
-                <View style={styles.starBadge}>
-                  <Star size={9} color="#000000" fill="#000000" />
+            if (node.type === 'empty') {
+              return (
+                <View
+                  key={`empty-${index}`}
+                  style={[styles.nodeEmpty, { left: x, top: y }]}
+                >
+                  <Plus size={14} color="#A1A1AA" strokeWidth={2} />
                 </View>
-              </TactilePressable>
-            );
-          }
+              );
+            }
 
-          if (isPaid) {
+            const member = node.member!;
+            let isRecipient = false;
+            if (isFull && (member.id === currentRecipientId || member.userId === currentRecipientId)) {
+              isRecipient = true;
+            }
+
+            let isMe = false;
+            if (currentUserId && (member.id === currentUserId || member.userId === currentUserId)) {
+              isMe = true;
+            } else if (currentUserPhone && member.phone && currentUserPhone.replace(/[^0-9]/g, '') === member.phone.replace(/[^0-9]/g, '')) {
+              isMe = true;
+            } else if (currentUserName && member.name && currentUserName.trim().toLowerCase().replace('(you)', '').trim() === member.name.trim().toLowerCase().replace('(you)', '').trim()) {
+              isMe = true;
+            }
+
+            let isPaid = false;
+            let isSubmitted = false;
+
+            if (isFull && !isRecipient) {
+              if (member.paymentStatus === 'verified') {
+                isPaid = true;
+              } else if (member.paymentStatus === 'submitted' || member.paymentProofUrl) {
+                isSubmitted = true;
+              }
+            }
+
+            let initial = 'M';
+            if (member.name) {
+              initial = member.name[0].toUpperCase();
+            }
+
+            const outlineStyle = isMe && !isRecipient ? styles.nodeOutlineMe : null;
+
+            if (isRecipient) {
+              return (
+                <TactilePressable
+                  key={member.id}
+                  scaleTo={0.88}
+                  containerStyle={{ position: 'absolute', left: x, top: y, width: 48, height: 48, zIndex: 10 }}
+                  style={[styles.nodeRecipient, isMe && styles.nodeRecipientMe]}
+                  onPress={() => {
+                    onMemberPress(member);
+                  }}
+                >
+                  <Text style={styles.recipientInitial}>{initial}</Text>
+                  <View style={styles.starBadge}>
+                    <Star size={9} color="#000000" fill="#000000" />
+                  </View>
+                </TactilePressable>
+              );
+            }
+
+            if (isPaid) {
+              return (
+                <TactilePressable
+                  key={member.id}
+                  scaleTo={0.9}
+                  containerStyle={{ position: 'absolute', left: x, top: y, width: 48, height: 48, zIndex: 10 }}
+                  style={[styles.nodePaid, outlineStyle]}
+                  onPress={() => {
+                    onMemberPress(member);
+                  }}
+                >
+                  <Text style={styles.nodeInitial}>{initial}</Text>
+                  <View style={styles.checkBadge}>
+                    <Check size={9} color="#FFFFFF" strokeWidth={3.5} />
+                  </View>
+                </TactilePressable>
+              );
+            }
+
+            if (isSubmitted) {
+              return (
+                <TactilePressable
+                  key={member.id}
+                  scaleTo={0.9}
+                  containerStyle={{ position: 'absolute', left: x, top: y, width: 48, height: 48, zIndex: 10 }}
+                  style={[styles.nodeSubmitted, outlineStyle]}
+                  onPress={() => {
+                    onMemberPress(member);
+                  }}
+                >
+                  <Text style={styles.nodeInitial}>{initial}</Text>
+                  <View style={styles.submittedBadge}>
+                    <FileText size={8} color="#000000" strokeWidth={2.5} />
+                  </View>
+                </TactilePressable>
+              );
+            }
+
             return (
               <TactilePressable
                 key={member.id}
                 scaleTo={0.9}
                 containerStyle={{ position: 'absolute', left: x, top: y, width: 48, height: 48, zIndex: 10 }}
-                style={styles.nodePaid}
+                style={[styles.nodePending, outlineStyle]}
                 onPress={() => {
                   onMemberPress(member);
                 }}
               >
                 <Text style={styles.nodeInitial}>{initial}</Text>
-                <View style={styles.checkBadge}>
-                  <Check size={9} color="#FFFFFF" strokeWidth={3.5} />
-                </View>
+                {isFull && (
+                  <View style={styles.clockBadge}>
+                    <Clock size={8} color="#71717A" strokeWidth={2.5} />
+                  </View>
+                )}
               </TactilePressable>
             );
-          }
-
-          return (
-            <TactilePressable
-              key={member.id}
-              scaleTo={0.9}
-              containerStyle={{ position: 'absolute', left: x, top: y, width: 48, height: 48, zIndex: 10 }}
-              style={styles.nodePending}
-              onPress={() => {
-                onMemberPress(member);
-              }}
-            >
-              <Text style={styles.nodeInitial}>{initial}</Text>
-              {isFull && (
-                <View style={styles.clockBadge}>
-                  <Clock size={8} color="#71717A" strokeWidth={2.5} />
-                </View>
-              )}
-            </TactilePressable>
-          );
-        })}
+          })}
+        </Animated.View>
       </View>
     </View>
   );
@@ -221,6 +290,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   centerRefreshCircle: {
+    position: 'absolute',
+    left: CENTER - 42,
+    top: CENTER - 42,
     width: 84,
     height: 84,
     borderRadius: 42,
@@ -234,6 +306,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 4,
     elevation: 2,
+    zIndex: 5,
   },
   centerWaitingCircle: {
     position: 'absolute',
@@ -292,6 +365,18 @@ const styles = StyleSheet.create({
     height: 46,
     borderRadius: 23,
     backgroundColor: '#E4E4E7',
+    borderWidth: 1,
+    borderColor: '#E4E4E7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  nodeSubmitted: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: '#E4E4E7',
+    borderWidth: 1,
+    borderColor: '#E4E4E7',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -300,8 +385,18 @@ const styles = StyleSheet.create({
     height: 46,
     borderRadius: 23,
     backgroundColor: '#E4E4E7',
+    borderWidth: 1,
+    borderColor: '#E4E4E7',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  nodeOutlineMe: {
+    borderWidth: 2.2,
+    borderColor: '#000000',
+  },
+  nodeRecipientMe: {
+    borderWidth: 2.2,
+    borderColor: '#FFFFFF',
   },
   nodeEmpty: {
     position: 'absolute',
@@ -328,6 +423,19 @@ const styles = StyleSheet.create({
     height: 16,
     borderRadius: 8,
     backgroundColor: '#000000',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  submittedBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.2,
+    borderColor: '#000000',
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -7,6 +7,7 @@ export type PaymentStatus = 'pending' | 'submitted' | 'verified' | 'rejected';
 
 export interface Member {
   id: string;
+  userId?: string;
   name: string;
   phone: string;
   avatar?: string;
@@ -15,6 +16,11 @@ export interface Member {
   accountTitle: string;
   hasReceivedPayout: boolean;
   payoutMonthIndex?: number;
+  paymentProofUrl?: string;
+  paymentStatus?: PaymentStatus;
+  submittedAt?: string;
+  verifiedAt?: string;
+  paymentNotes?: string;
 }
 
 export interface PaymentProof {
