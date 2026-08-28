@@ -22,15 +22,29 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.kameti.mobile"
+      "bundleIdentifier": "com.kameti.mobile",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Kameti needs access to your microphone to ask voice questions about your committees."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
       },
-      "package": "com.kameti.mobile"
+      "package": "com.kameti.mobile",
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
+    "plugins": [
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Kameti needs access to your microphone to ask voice questions about your committees."
+        }
+      ]
+    ],
     "web": {
       "favicon": "./assets/favicon.png"
     }

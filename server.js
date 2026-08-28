@@ -1,5 +1,6 @@
 // Zero-dependency HTTP server & Backend API proxy for Kameti Mobile App
 const http = require('http');
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
@@ -275,6 +276,188 @@ async function handleChatWithAssistant(req, res) {
   });
 }
 
+async function handleTranscribeAudio(req, res) {
+  let body = '';
+  const MAX_AUDIO_PAYLOAD = 15 * 1024 * 1024; // 15MB limit
+
+  req.on('data', chunk => {
+    body += chunk.toString();
+    if (body.length > MAX_AUDIO_PAYLOAD) {
+      req.destroy();
+    }
+  });
+
+  req.on('end', async () => {
+    try {
+      const parsed = JSON.parse(body || '{}');
+      const { audioBase64, mimeType } = parsed;
+
+      if (!audioBase64 || typeof audioBase64 !== 'string' || !audioBase64.trim()) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ success: false, error: 'audioBase64 is required and must be a non-empty string.' }));
+      }
+
+      const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+      if (!apiKey) {
+        console.error('[Server Backend] Missing GEMINI_API_KEY for audio transcription.');
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ success: false, error: 'Server configuration error: missing API key.' }));
+      }
+
+      const cleanMimeType = mimeType || 'audio/mp4';
+      const cleanData = audioBase64.replace(/^data:audio\/[a-zA-Z0-9]+;base64,/, '').trim();
+
+      const requestPayload = {
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              {
+                inlineData: {
+                  mimeType: cleanMimeType,
+                  data: cleanData,
+                },
+              },
+              {
+                text: 'Please listen to this audio carefully and transcribe the user\'s spoken words verbatim. The user may speak in English, Urdu script (اردو), or Pakistani Roman Urdu (such as "Meri payment kab due hai?", "Mera payout kab hai?", "Kameti ki kisht kitni hai?", or "Agli turn kiski hai?"). Recognize colloquial Kameti, Committee, Beesi, Kisht, Parchi, and Payout terms accurately. Output ONLY the verbatim transcribed text. Do NOT answer the question. Do NOT add conversational replies, notes, quotation marks, or markdown explanations.',
+              },
+            ],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 500,
+        },
+      };
+
+      console.log(`[Server Backend] Processing audio transcription request (${cleanMimeType}, ~${Math.round(cleanData.length * 0.75 / 1024)} KB)...`);
+      const rawTranscription = await callGeminiWithBackoff(requestPayload, apiKey);
+
+      // Clean up transcription
+      let cleaned = (rawTranscription || '')
+        .trim()
+        .replace(/^["']|["']$/g, '')
+        .replace(/^(Transcription:?\s*)/i, '')
+        .trim();
+
+      // If Gemini returned timestamp or silence artifacts, treat as empty string
+      if (/^(00:00|0:00|\[silence\]|\(silence\)|\.\.\.)$/i.test(cleaned)) {
+        cleaned = '';
+      }
+
+      console.log(`[Server Backend] Audio transcription result: "${cleaned}"`);
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ success: true, text: cleaned }));
+    } catch (err) {
+      console.error('[Server Backend] Audio transcription failed:', err.message);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ success: false, error: 'Unable to transcribe audio. Please try again.' }));
+    }
+  });
+}
+
+function splitTextIntoTTSChunks(text, maxLen = 180) {
+  if (!text) return [];
+  const sentences = text.match(/[^.!?\n]+[.!?\n]+|[^.!?\n]+$/g) || [text];
+  const chunks = [];
+  let current = '';
+
+  for (const s of sentences) {
+    const trimmed = s.trim();
+    if (!trimmed) continue;
+
+    if ((current + ' ' + trimmed).trim().length <= maxLen) {
+      current = (current + ' ' + trimmed).trim();
+    } else {
+      if (current) chunks.push(current);
+      if (trimmed.length > maxLen) {
+        const words = trimmed.split(' ');
+        let wordChunk = '';
+        for (const w of words) {
+          if ((wordChunk + ' ' + w).trim().length <= maxLen) {
+            wordChunk = (wordChunk + ' ' + w).trim();
+          } else {
+            if (wordChunk) chunks.push(wordChunk);
+            wordChunk = w;
+          }
+        }
+        if (wordChunk) current = wordChunk;
+        else current = '';
+      } else {
+        current = trimmed;
+      }
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks;
+}
+
+function fetchTTSChunkBuffer(chunkText, lang = 'en') {
+  const clean = encodeURIComponent(chunkText);
+  const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${lang}&client=tw-ob&q=${clean}`;
+
+  return new Promise((resolve, reject) => {
+    https.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+      },
+    }, (res) => {
+      if (res.statusCode !== 200) {
+        return reject(new Error(`TTS chunk status ${res.statusCode}`));
+      }
+      const data = [];
+      res.on('data', c => data.push(c));
+      res.on('end', () => resolve(Buffer.concat(data)));
+    }).on('error', reject);
+  });
+}
+
+async function handleTextToSpeech(req, res) {
+  let body = '';
+  req.on('data', chunk => {
+    body += chunk.toString();
+    if (body.length > 50000) req.destroy();
+  });
+
+  req.on('end', async () => {
+    try {
+      const parsed = JSON.parse(body || '{}');
+      const { text, language } = parsed;
+
+      if (!text || typeof text !== 'string' || !text.trim()) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ success: false, error: 'text is required.' }));
+      }
+
+      const lang = language === 'ur' ? 'ur' : 'en';
+      const cleanText = text.replace(/[*_#`~>]/g, '').trim();
+      const chunks = splitTextIntoTTSChunks(cleanText, 180);
+
+      console.log(`[Server Backend] Synthesizing TTS (${chunks.length} chunks, lang: ${lang}): "${cleanText.slice(0, 40)}..."`);
+      const buffers = [];
+      for (const chunk of chunks) {
+        const buf = await fetchTTSChunkBuffer(chunk, lang);
+        buffers.push(buf);
+      }
+
+      const combinedBuffer = Buffer.concat(buffers);
+      const audioBase64 = combinedBuffer.toString('base64');
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({
+        success: true,
+        audioBase64,
+        mimeType: 'audio/mp3',
+      }));
+    } catch (err) {
+      console.error('[Server Backend] TTS synthesis failed:', err.message);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ success: false, error: 'Failed to synthesize speech audio.' }));
+    }
+  });
+}
+
 const server = http.createServer((req, res) => {
   // CORS Headers & Anti-Caching Headers
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -296,6 +479,14 @@ const server = http.createServer((req, res) => {
   // Backend API routes
   if (req.method === 'POST' && (reqPath === '/api/chatWithAssistant' || reqPath === '/chatWithAssistant')) {
     return handleChatWithAssistant(req, res);
+  }
+
+  if (req.method === 'POST' && (reqPath === '/api/transcribeAudio' || reqPath === '/transcribeAudio')) {
+    return handleTranscribeAudio(req, res);
+  }
+
+  if (req.method === 'POST' && (reqPath === '/api/textToSpeech' || reqPath === '/textToSpeech')) {
+    return handleTextToSpeech(req, res);
   }
 
   if (reqPath === '/' || reqPath === '') {

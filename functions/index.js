@@ -1,5 +1,6 @@
 const { onRequest } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+const https = require('https');
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -250,3 +251,214 @@ exports.chatWithAssistant = onRequest({ cors: true }, async (req, res) => {
     });
   }
 });
+
+/**
+ * Cloud Function endpoint: transcribeAudio
+ */
+exports.transcribeAudio = onRequest({ cors: true }, async (req, res) => {
+  if (req.method === 'OPTIONS') {
+    res.set('Access-Control-Allow-Origin', '*');
+    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    return res.status(204).send('');
+  }
+
+  res.set('Access-Control-Allow-Origin', '*');
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({
+      success: false,
+      error: 'Method Not Allowed. Use POST.',
+    });
+  }
+
+  try {
+    const { audioBase64, mimeType } = req.body || {};
+
+    if (!audioBase64 || typeof audioBase64 !== 'string' || !audioBase64.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: 'audioBase64 is required and must be a non-empty string.',
+      });
+    }
+
+    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+    if (!apiKey) {
+      console.error('[Backend Gemini] Missing GEMINI_API_KEY for audio transcription.');
+      return res.status(500).json({
+        success: false,
+        error: 'Server configuration error: missing API key.',
+      });
+    }
+
+    const cleanMimeType = mimeType || 'audio/mp4';
+    const cleanData = audioBase64.replace(/^data:audio\/[a-zA-Z0-9]+;base64,/, '').trim();
+
+    const requestPayload = {
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            {
+              inlineData: {
+                mimeType: cleanMimeType,
+                data: cleanData,
+              },
+            },
+              {
+                text: 'Please listen to this audio carefully and transcribe the user\'s spoken words verbatim. The user may speak in English, Urdu script (اردو), or Pakistani Roman Urdu (such as "Meri payment kab due hai?", "Mera payout kab hai?", "Kameti ki kisht kitni hai?", or "Agli turn kiski hai?"). Recognize colloquial Kameti, Committee, Beesi, Kisht, Parchi, and Payout terms accurately. Output ONLY the verbatim transcribed text. Do NOT answer the question. Do NOT add conversational replies, notes, quotation marks, or markdown explanations.',
+              },
+          ],
+        },
+      ],
+      generationConfig: {
+        temperature: 0.1,
+        maxOutputTokens: 500,
+      },
+    };
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestPayload),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Gemini returned status ${response.status}`);
+    }
+
+    const data = await response.json();
+    const rawReply = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    let cleaned = rawReply.trim().replace(/^["']|["']$/g, '').replace(/^(Transcription:?\s*)/i, '').trim();
+
+    if (/^(00:00|0:00|\[silence\]|\(silence\)|\.\.\.)$/i.test(cleaned)) {
+      cleaned = '';
+    }
+
+    return res.status(200).json({
+      success: true,
+      text: cleaned,
+    });
+  } catch (err) {
+    console.error('[Backend Gemini] Audio transcription failed:', err.message);
+    return res.status(500).json({
+      success: false,
+      error: 'Unable to transcribe audio. Please try again.',
+    });
+  }
+});
+
+function splitTextIntoTTSChunks(text, maxLen = 180) {
+  if (!text) return [];
+  const sentences = text.match(/[^.!?\n]+[.!?\n]+|[^.!?\n]+$/g) || [text];
+  const chunks = [];
+  let current = '';
+
+  for (const s of sentences) {
+    const trimmed = s.trim();
+    if (!trimmed) continue;
+
+    if ((current + ' ' + trimmed).trim().length <= maxLen) {
+      current = (current + ' ' + trimmed).trim();
+    } else {
+      if (current) chunks.push(current);
+      if (trimmed.length > maxLen) {
+        const words = trimmed.split(' ');
+        let wordChunk = '';
+        for (const w of words) {
+          if ((wordChunk + ' ' + w).trim().length <= maxLen) {
+            wordChunk = (wordChunk + ' ' + w).trim();
+          } else {
+            if (wordChunk) chunks.push(wordChunk);
+            wordChunk = w;
+          }
+        }
+        if (wordChunk) current = wordChunk;
+        else current = '';
+      } else {
+        current = trimmed;
+      }
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks;
+}
+
+function fetchTTSChunkBuffer(chunkText, lang = 'en') {
+  const clean = encodeURIComponent(chunkText);
+  const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${lang}&client=tw-ob&q=${clean}`;
+
+  return new Promise((resolve, reject) => {
+    https.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+      },
+    }, (res) => {
+      if (res.statusCode !== 200) {
+        return reject(new Error(`TTS chunk status ${res.statusCode}`));
+      }
+      const data = [];
+      res.on('data', c => data.push(c));
+      res.on('end', () => resolve(Buffer.concat(data)));
+    }).on('error', reject);
+  });
+}
+
+/**
+ * Cloud Function endpoint: textToSpeech
+ */
+exports.textToSpeech = onRequest({ cors: true }, async (req, res) => {
+  if (req.method === 'OPTIONS') {
+    res.set('Access-Control-Allow-Origin', '*');
+    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    return res.status(204).send('');
+  }
+
+  res.set('Access-Control-Allow-Origin', '*');
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({
+      success: false,
+      error: 'Method Not Allowed. Use POST.',
+    });
+  }
+
+  try {
+    const { text, language } = req.body || {};
+
+    if (!text || typeof text !== 'string' || !text.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: 'text is required and must be a non-empty string.',
+      });
+    }
+
+    const lang = language === 'ur' ? 'ur' : 'en';
+    const cleanText = text.replace(/[*_#`~>]/g, '').trim();
+    const chunks = splitTextIntoTTSChunks(cleanText, 180);
+
+    const buffers = [];
+    for (const chunk of chunks) {
+      const buf = await fetchTTSChunkBuffer(chunk, lang);
+      buffers.push(buf);
+    }
+
+    const combinedBuffer = Buffer.concat(buffers);
+    const audioBase64 = combinedBuffer.toString('base64');
+
+    return res.status(200).json({
+      success: true,
+      audioBase64,
+      mimeType: 'audio/mp3',
+    });
+  } catch (err) {
+    console.error('[Cloud Function] TTS synthesis failed:', err.message);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to synthesize speech audio.',
+    });
+  }
+});
+

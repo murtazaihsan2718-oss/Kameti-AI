@@ -10,9 +10,12 @@ import {
   Keyboard,
   ActivityIndicator,
 } from 'react-native';
-import { ArrowLeft, User, Mic, ArrowUp } from 'lucide-react-native';
+import { ArrowLeft, User, Mic, ArrowUp, Volume2, VolumeX } from 'lucide-react-native';
 import { TactilePressable } from '../components/TactilePressable';
 import { aiService } from '../services/aiService';
+import { audioRecordingService } from '../services/audioRecordingService';
+import { speechToTextService } from '../services/speechToTextService';
+import { textToSpeechService } from '../services/textToSpeechService';
 
 export interface ChatMessage {
   id: string;
@@ -156,8 +159,22 @@ export const ChatAssistantScreen: React.FC<ChatAssistantScreenProps> = ({
   const [inputText, setInputText] = useState('');
   const [isAssistantTyping, setIsAssistantTyping] = useState(false);
   const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [isTogglingMic, setIsTogglingMic] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [activeSpeakingId, setActiveSpeakingId] = useState<string | null>(null);
 
   const scrollViewRef = useRef<ScrollView>(null);
+
+  // Clean up any active recording and speech on screen unmount
+  useEffect(() => {
+    return () => {
+      audioRecordingService.cancelRecording();
+      textToSpeechService.stopSpeech();
+    };
+  }, []);
 
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -189,10 +206,68 @@ export const ChatAssistantScreen: React.FC<ChatAssistantScreenProps> = ({
     scrollToBottom(true);
   }, [messages, isAssistantTyping]);
 
+  /**
+   * Handle microphone press:
+   * 1. If idle -> Stop active speech and start audio recording.
+   * 2. If recording -> Stop audio recording, transcribe, and automatically send query to Kameti AI.
+   */
+  const handleMicPress = async () => {
+    if (isTogglingMic || isAssistantTyping || isTranscribing) {
+      return;
+    }
+
+    // Stop active speech playback when user intends to speak
+    await textToSpeechService.stopSpeech();
+    setIsSpeaking(false);
+
+    setIsTogglingMic(true);
+    try {
+      if (isRecording) {
+        setIsRecording(false);
+        const result = await audioRecordingService.stopRecording();
+        if (result && result.uri) {
+          console.log(`[Voice] Audio recording captured at ${result.uri}. Starting transcription...`);
+          setIsTranscribing(true);
+          try {
+            const sttResult = await speechToTextService.transcribeAudio(result.uri);
+            if (sttResult && sttResult.success && sttResult.text && sttResult.text.trim()) {
+              const spokenQuery = sttResult.text.trim();
+              console.log(`[Voice] Transcribed text: "${spokenQuery}". Auto-dispatching to Kameti AI...`);
+              setInputText('');
+              // Automatically dispatch spoken question to the existing chatbot pipeline
+              await handleSendMessage(spokenQuery);
+            } else if (sttResult && !sttResult.success && sttResult.error) {
+              console.warn('[Voice] Transcription notice:', sttResult.error);
+            }
+          } catch (transcribeErr) {
+            console.error('[Voice] Transcription request failed:', transcribeErr);
+          } finally {
+            setIsTranscribing(false);
+          }
+        }
+      } else {
+        const started = await audioRecordingService.startRecording();
+        if (started) {
+          setIsRecording(true);
+        }
+      }
+    } catch (err) {
+      console.error('[Voice] Error in handleMicPress:', err);
+      setIsRecording(false);
+      setIsTranscribing(false);
+    } finally {
+      setIsTogglingMic(false);
+    }
+  };
+
   const handleSendMessage = async (textToSend?: string) => {
     if (isAssistantTyping) {
       return;
     }
+
+    // Stop active speech playback when sending new message
+    await textToSpeechService.stopSpeech();
+    setIsSpeaking(false);
 
     const rawText = textToSend !== undefined ? textToSend : inputText;
     const trimmed = (rawText || '').trim();
@@ -239,6 +314,22 @@ export const ChatAssistantScreen: React.FC<ChatAssistantScreenProps> = ({
       };
 
       setMessages(prev => [...prev, assistantMessage]);
+
+      // Speak assistant response aloud if not muted
+      if (!isMuted && assistantText) {
+        setIsSpeaking(true);
+        setActiveSpeakingId(assistantMessage.id);
+        textToSpeechService.speakText(assistantText, {
+          onDone: () => {
+            setIsSpeaking(false);
+            setActiveSpeakingId(null);
+          },
+          onError: () => {
+            setIsSpeaking(false);
+            setActiveSpeakingId(null);
+          },
+        });
+      }
     } catch (err: any) {
       const errorMsg: ChatMessage = {
         id: `asst_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
@@ -268,25 +359,51 @@ export const ChatAssistantScreen: React.FC<ChatAssistantScreenProps> = ({
           style={styles.headerBtn}
           haptic="selection"
           scaleTo={0.9}
-          onPress={onBack}
+          onPress={() => {
+            textToSpeechService.stopSpeech();
+            onBack();
+          }}
         >
           <ArrowLeft size={20} color="#000000" strokeWidth={2.5} />
         </TactilePressable>
 
         <Text style={styles.headerTitle}>Kameti AI</Text>
 
-        <TactilePressable
-          style={styles.headerBtn}
-          haptic="selection"
-          scaleTo={0.9}
-          onPress={() => {
-            if (onOpenProfile) {
-              onOpenProfile();
-            }
-          }}
-        >
-          <User size={20} color="#000000" strokeWidth={2} />
-        </TactilePressable>
+        <View style={styles.headerRightActions}>
+          {/* Speaker / Mute Toggle Button */}
+          <TactilePressable
+            style={styles.headerBtn}
+            haptic="selection"
+            scaleTo={0.9}
+            onPress={() => {
+              if (!isMuted && isSpeaking) {
+                textToSpeechService.stopSpeech();
+                setIsSpeaking(false);
+              }
+              setIsMuted(prev => !prev);
+            }}
+          >
+            {isMuted ? (
+              <VolumeX size={20} color="#A1A1AA" strokeWidth={2.2} />
+            ) : (
+              <Volume2 size={20} color={isSpeaking ? '#2563EB' : '#000000'} strokeWidth={2.2} />
+            )}
+          </TactilePressable>
+
+          <TactilePressable
+            style={styles.headerBtn}
+            haptic="selection"
+            scaleTo={0.9}
+            onPress={() => {
+              textToSpeechService.stopSpeech();
+              if (onOpenProfile) {
+                onOpenProfile();
+              }
+            }}
+          >
+            <User size={20} color="#000000" strokeWidth={2} />
+          </TactilePressable>
+        </View>
       </View>
 
       {/* Chat Messages List */}
@@ -310,9 +427,47 @@ export const ChatAssistantScreen: React.FC<ChatAssistantScreenProps> = ({
             );
           }
 
+          const isCurrentMsgPlaying = isSpeaking && activeSpeakingId === msg.id;
+
           return (
             <View key={msg.id} style={[styles.messageBubble, styles.assistantBubble]}>
               <FormattedMessage text={msg.text} isUser={false} />
+              <View style={styles.assistantBubbleFooter}>
+                <TactilePressable
+                  haptic="light"
+                  scaleTo={0.92}
+                  style={styles.replaySpeakerBtn}
+                  onPress={async () => {
+                    if (isCurrentMsgPlaying) {
+                      await textToSpeechService.stopSpeech();
+                      setIsSpeaking(false);
+                      setActiveSpeakingId(null);
+                    } else {
+                      setActiveSpeakingId(msg.id);
+                      setIsSpeaking(true);
+                      await textToSpeechService.speakText(msg.text, {
+                        onDone: () => {
+                          setIsSpeaking(false);
+                          setActiveSpeakingId(null);
+                        },
+                        onError: () => {
+                          setIsSpeaking(false);
+                          setActiveSpeakingId(null);
+                        },
+                      });
+                    }
+                  }}
+                >
+                  <Volume2
+                    size={13}
+                    color={isCurrentMsgPlaying ? '#60A5FA' : '#9CA3AF'}
+                    strokeWidth={2.2}
+                  />
+                  <Text style={[styles.replaySpeakerText, isCurrentMsgPlaying && styles.replaySpeakerTextActive]}>
+                    {isCurrentMsgPlaying ? 'Playing...' : 'Listen'}
+                  </Text>
+                </TactilePressable>
+              </View>
             </View>
           );
         })}
@@ -354,39 +509,67 @@ export const ChatAssistantScreen: React.FC<ChatAssistantScreenProps> = ({
         )}
 
         {/* Floating Input Pill */}
-        <View style={styles.inputPill}>
-          <TextInput
-            style={styles.textInput}
-            placeholder="Message Kameti AI..."
-            placeholderTextColor="#A1A1AA"
-            value={inputText}
-            onChangeText={setInputText}
-            onSubmitEditing={() => {
-              handleSendMessage();
-            }}
-            returnKeyType="send"
-            blurOnSubmit={false}
-            multiline={false}
-          />
+        <View
+          style={[
+            styles.inputPill,
+            isRecording && styles.inputPillRecording,
+            isTranscribing && styles.inputPillTranscribing,
+          ]}
+        >
+          {isRecording ? (
+            <View style={styles.recordingStatusContainer}>
+              <View style={styles.recordingRedDot} />
+              <Text style={styles.recordingStatusText}>Recording audio... Tap mic to stop</Text>
+            </View>
+          ) : isTranscribing ? (
+            <View style={styles.transcribingStatusContainer}>
+              <ActivityIndicator size="small" color="#000000" />
+              <Text style={styles.transcribingStatusText}>Transcribing your voice...</Text>
+            </View>
+          ) : (
+            <TextInput
+              style={styles.textInput}
+              placeholder="Message Kameti AI..."
+              placeholderTextColor="#A1A1AA"
+              value={inputText}
+              onChangeText={setInputText}
+              onSubmitEditing={() => {
+                handleSendMessage();
+              }}
+              returnKeyType="send"
+              blurOnSubmit={false}
+              multiline={false}
+            />
+          )}
 
-          {/* Passive Microphone Button */}
+          {/* Microphone Button (Toggles Audio Recording with tactile feedback) */}
           <TactilePressable
-            haptic="light"
+            haptic={isRecording ? 'impactHeavy' : 'medium'}
             scaleTo={0.88}
-            style={styles.micBtn}
-            onPress={() => {
-              // Passive placeholder
-            }}
+            style={[
+              styles.micBtn,
+              isRecording && styles.micBtnActive,
+              isTranscribing && styles.micBtnDisabled,
+            ]}
+            disabled={isTogglingMic || isAssistantTyping || isTranscribing}
+            onPress={handleMicPress}
           >
-            <Mic size={16} color="#71717A" strokeWidth={2.2} />
+            {isTranscribing ? (
+              <ActivityIndicator size="small" color="#71717A" />
+            ) : (
+              <Mic size={16} color={isRecording ? '#FFFFFF' : '#71717A'} strokeWidth={2.2} />
+            )}
           </TactilePressable>
 
           {/* Send Arrow Button */}
           <TactilePressable
             haptic="success"
             scaleTo={0.88}
-            style={[styles.sendBtn, (!hasText || isAssistantTyping) && styles.sendBtnDisabled]}
-            disabled={!hasText || isAssistantTyping}
+            style={[
+              styles.sendBtn,
+              (!hasText || isAssistantTyping || isRecording || isTranscribing) && styles.sendBtnDisabled,
+            ]}
+            disabled={!hasText || isAssistantTyping || isRecording || isTranscribing}
             onPress={() => handleSendMessage()}
           >
             <ArrowUp size={16} color="#FFFFFF" strokeWidth={2.6} />
@@ -410,6 +593,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 8,
     backgroundColor: '#FFFFFF',
+  },
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   headerBtn: {
     width: 38,
@@ -446,6 +634,32 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     backgroundColor: '#000000',
     borderRadius: 20,
+  },
+  assistantBubbleFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    marginTop: 8,
+    paddingTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  replaySpeakerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.07)',
+  },
+  replaySpeakerText: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    fontWeight: '600',
+  },
+  replaySpeakerTextActive: {
+    color: '#60A5FA',
   },
   userMessageText: {
     fontSize: 14,
@@ -523,6 +737,44 @@ const styles = StyleSheet.create({
     borderColor: '#E4E4E7',
     gap: 6,
   },
+  inputPillRecording: {
+    borderColor: '#DC2626',
+    backgroundColor: '#FEF2F2',
+  },
+  inputPillTranscribing: {
+    borderColor: '#D4D4D8',
+    backgroundColor: '#F4F4F5',
+  },
+  recordingStatusContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 4,
+  },
+  recordingRedDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#DC2626',
+  },
+  recordingStatusText: {
+    fontSize: 13,
+    color: '#DC2626',
+    fontWeight: '600',
+  },
+  transcribingStatusContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 4,
+  },
+  transcribingStatusText: {
+    fontSize: 13,
+    color: '#52525B',
+    fontWeight: '600',
+  },
   textInput: {
     flex: 1,
     fontSize: 14,
@@ -537,6 +789,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#E4E4E7',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  micBtnActive: {
+    backgroundColor: '#DC2626',
+  },
+  micBtnDisabled: {
+    opacity: 0.5,
   },
   sendBtn: {
     width: 32,
