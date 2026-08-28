@@ -5,7 +5,7 @@ import { storageService } from '../services/storageService.js';
 import { committeeService } from '../services/committeeService.js';
 import { formatCurrency, PaymentMethods } from '../models/dataModels.js';
 
-export function renderProfileView(container, { onLogout, onReload, showToast }) {
+export function renderProfileView(container, { onBack, onLogout, onReload, showToast }) {
   const user = authService.getCurrentUser();
   const committees = committeeService.getMyCommittees();
 
@@ -14,7 +14,9 @@ export function renderProfileView(container, { onLogout, onReload, showToast }) 
       <div style="padding: 12px 20px 24px 20px;">
         <!-- Top Navbar -->
         <div class="app-top-header">
-          <div style="width: 38px;"></div>
+          <button id="btn-profile-back" class="btn-icon-header">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
+          </button>
           <span class="header-title">My Profile</span>
           <div style="width: 38px;"></div>
         </div>
@@ -91,6 +93,13 @@ export function renderProfileView(container, { onLogout, onReload, showToast }) 
           showToast('Profile updated successfully ✓');
           render();
         }
+      });
+    }
+
+    const btnBack = document.getElementById('btn-profile-back');
+    if (btnBack) {
+      btnBack.addEventListener('click', () => {
+        if (onBack) onBack();
       });
     }
 

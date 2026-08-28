@@ -255,6 +255,8 @@ class KametiApp {
   renderVoice() {
     this.showNavigationChrome();
     openVoiceAssistantModal({
+      onBack: () => this.navigate('home'),
+      onOpenProfile: () => this.navigate('profile'),
       showToast: (msg) => this.showToast(msg)
     });
   }
@@ -271,6 +273,7 @@ class KametiApp {
   renderProfile() {
     this.showNavigationChrome();
     renderProfileView(this.appRoot, {
+      onBack: () => this.navigate('home'),
       onLogout: () => this.renderOnboarding(),
       onReload: () => this.renderProfile(),
       showToast: (msg) => this.showToast(msg)

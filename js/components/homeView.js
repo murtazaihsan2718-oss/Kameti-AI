@@ -1,36 +1,80 @@
-// Home View Component - 100% SVG Line Icons, Zero Emojis (Matching Image 3 & 4 1-to-1)
+// Home View Component - 100% SVG Line Icons, Zero Emojis (Matching Reference Design 1-to-1)
 
 import { storageService } from '../services/storageService.js';
 import { FirebaseService } from '../services/firebaseService.js';
 import { formatCurrency } from '../models/dataModels.js';
 
 export function renderHomeView(container, { onNavigate, onOpenCommittee, showToast }) {
-  let committees = storageService.getCommittees();
+  const currentUser = storageService.getCurrentUser();
 
-  // Real-time listener for cloud committees
+  function getUserCommittees() {
+    const allCommittees = storageService.getCommittees();
+    if (!currentUser) return allCommittees;
+
+    const userPhone = (currentUser.verifiedPhone || currentUser.phone || '').replace(/[^0-9]/g, '');
+    const userName = (currentUser.name || '').trim().toLowerCase().replace('(you)', '').trim();
+
+    return allCommittees.filter(c => {
+      // Creator match
+      if (c.creatorId === currentUser.id) return true;
+      // Member list match
+      if (c.members && Array.isArray(c.members)) {
+        return c.members.some(m => {
+          const mPhone = (m.phone || '').replace(/[^0-9]/g, '');
+          const mName = (m.name || '').trim().toLowerCase().replace('(you)', '').trim();
+          if (m.id === currentUser.id || m.userId === currentUser.id) return true;
+          if (userPhone && mPhone && userPhone === mPhone) return true;
+          if (userName && mName && userName === mName) return true;
+          return false;
+        });
+      }
+      // Default sample committees
+      return c.id === 'com_friends_2026' || c.id === 'com_office_2026';
+    });
+  }
+
+  let committees = getUserCommittees();
+
+  // Cloud sync only for user's relevant committees
   const unsub = FirebaseService.subscribeCommittees((cloudList) => {
-    if (cloudList && cloudList.length > 0) {
+    if (cloudList && cloudList.length > 0 && currentUser) {
       const localList = storageService.getCommittees();
+      const userPhone = (currentUser.verifiedPhone || currentUser.phone || '').replace(/[^0-9]/g, '');
+      const userName = (currentUser.name || '').trim().toLowerCase().replace('(you)', '').trim();
+
       cloudList.forEach(cc => {
-        if (!localList.some(lc => lc.id === cc.id || lc.joinCode === cc.joinCode)) {
-          localList.unshift({
-            id: cc.id,
-            name: cc.name,
-            creatorId: cc.members?.[0]?.id || 'usr_admin',
-            numberOfMembers: cc.memberCount || cc.numberOfMembers || 5,
-            contributionAmount: cc.contributionAmount,
-            frequency: cc.frequency || 'monthly',
-            duration: cc.totalCycles || cc.duration || 5,
-            startDate: cc.startDate,
-            recipientSelectionMethod: cc.selectionMode || cc.recipientSelectionMethod || 'random',
-            status: cc.status || 'active',
-            joinCode: cc.joinCode,
-            createdAt: new Date().toISOString()
-          });
+        const isUserInComm = (cc.creatorId === currentUser.id) || (cc.members && cc.members.some(m => {
+          const mPhone = (m.phone || '').replace(/[^0-9]/g, '');
+          const mName = (m.name || '').trim().toLowerCase().replace('(you)', '').trim();
+          return (m.id === currentUser.id || m.userId === currentUser.id) || (userPhone && mPhone && userPhone === mPhone) || (userName && mName && userName === mName);
+        }));
+
+        if (isUserInComm) {
+          const existingIdx = localList.findIndex(lc => lc.id === cc.id || (lc.joinCode && cc.joinCode && lc.joinCode === cc.joinCode));
+          if (existingIdx >= 0) {
+            localList[existingIdx] = { ...localList[existingIdx], ...cc };
+          } else {
+            localList.unshift({
+              id: cc.id,
+              name: cc.name,
+              creatorId: cc.creatorId || currentUser.id,
+              numberOfMembers: cc.memberCount || cc.numberOfMembers || 5,
+              contributionAmount: cc.contributionAmount,
+              frequency: cc.frequency || 'monthly',
+              duration: cc.totalCycles || cc.duration || 5,
+              startDate: cc.startDate,
+              recipientSelectionMethod: cc.selectionMode || cc.recipientSelectionMethod || 'random',
+              status: cc.status || 'active',
+              joinCode: cc.joinCode,
+              members: cc.members || [],
+              createdAt: new Date().toISOString()
+            });
+          }
         }
       });
+
       storageService.setCommittees(localList);
-      committees = localList;
+      committees = getUserCommittees();
       render();
     }
   });
