@@ -141,9 +141,10 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 20px;
-  background-color: #FFFFFF;
-  margin-bottom: 4px;
+  padding: 0;
+  margin-bottom: 12px;
+  background-color: transparent;
+  width: 100%;
 }
 
 .app-top-header .header-title {
@@ -151,6 +152,8 @@ html, body {
   font-weight: 800;
   color: #000000;
   letter-spacing: -0.02em;
+  text-align: center;
+  flex: 1;
 }
 
 .btn-icon-header {
@@ -164,6 +167,8 @@ html, body {
   justify-content: center;
   cursor: pointer;
   color: #000000;
+  flex-shrink: 0;
+  padding: 0;
 }
 
 /* Cards & Containers */

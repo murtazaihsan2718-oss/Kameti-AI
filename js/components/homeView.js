@@ -35,53 +35,37 @@ export function renderHomeView(container, { onNavigate, onOpenCommittee, showToa
 
   let committees = getUserCommittees();
 
-  // Cloud sync only for user's relevant committees
-  const unsub = FirebaseService.subscribeCommittees((cloudList) => {
-    if (cloudList && cloudList.length > 0 && currentUser) {
+  // Cloud sync only for committees the user already created or is participating in
+  if (currentUser) {
+    FirebaseService.subscribeCommittees((cloudList) => {
+      if (!cloudList || cloudList.length === 0) return;
       const localList = storageService.getCommittees();
-      const userPhone = (currentUser.verifiedPhone || currentUser.phone || '').replace(/[^0-9]/g, '');
-      const userName = (currentUser.name || '').trim().toLowerCase().replace('(you)', '').trim();
+      let hasChanges = false;
 
       cloudList.forEach(cc => {
-        const isUserInComm = (cc.creatorId === currentUser.id) || (cc.members && cc.members.some(m => {
-          const mPhone = (m.phone || '').replace(/[^0-9]/g, '');
-          const mName = (m.name || '').trim().toLowerCase().replace('(you)', '').trim();
-          return (m.id === currentUser.id || m.userId === currentUser.id) || (userPhone && mPhone && userPhone === mPhone) || (userName && mName && userName === mName);
-        }));
-
-        if (isUserInComm) {
-          const existingIdx = localList.findIndex(lc => lc.id === cc.id || (lc.joinCode && cc.joinCode && lc.joinCode === cc.joinCode));
-          if (existingIdx >= 0) {
-            localList[existingIdx] = { ...localList[existingIdx], ...cc };
-          } else {
-            localList.unshift({
-              id: cc.id,
-              name: cc.name,
-              creatorId: cc.creatorId || currentUser.id,
-              numberOfMembers: cc.memberCount || cc.numberOfMembers || 5,
-              contributionAmount: cc.contributionAmount,
-              frequency: cc.frequency || 'monthly',
-              duration: cc.totalCycles || cc.duration || 5,
-              startDate: cc.startDate,
-              recipientSelectionMethod: cc.selectionMode || cc.recipientSelectionMethod || 'random',
-              status: cc.status || 'active',
-              joinCode: cc.joinCode,
-              members: cc.members || [],
-              createdAt: new Date().toISOString()
-            });
-          }
+        const existingIdx = localList.findIndex(lc => lc.id === cc.id || (lc.joinCode && cc.joinCode && lc.joinCode.toUpperCase() === cc.joinCode.toUpperCase()));
+        if (existingIdx >= 0) {
+          // Update real-time state for existing committee
+          localList[existingIdx] = { ...localList[existingIdx], ...cc };
+          hasChanges = true;
+        } else if (cc.creatorId === currentUser.id) {
+          // Add if user created it in this session
+          localList.unshift(cc);
+          hasChanges = true;
         }
       });
 
-      storageService.setCommittees(localList);
-      committees = getUserCommittees();
-      render();
-    }
-  });
+      if (hasChanges) {
+        storageService.setItem('kameti_committees', localList);
+        committees = getUserCommittees();
+        render();
+      }
+    });
+  }
 
   function render() {
     container.innerHTML = `
-      <div style="padding: 16px 20px 24px 20px;">
+      <div style="padding: 12px 20px 24px 20px;">
         <!-- Top Navbar -->
         <div class="app-top-header">
           <button id="btn-menu" class="btn-icon-header">

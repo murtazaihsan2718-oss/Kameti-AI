@@ -90,12 +90,12 @@ export function openVoiceAssistantModal({ onBack, onOpenProfile, showToast } = {
         
         <!-- Top Navbar with Back Arrow -->
         <div class="app-top-header" style="flex-shrink: 0; margin-bottom: 8px;">
-          <button id="btn-voice-back" class="btn-icon-header" style="width: 38px; height: 38px; border-radius: 50%; background: #F4F4F5; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
+          <button id="btn-voice-back" class="btn-icon-header">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
           </button>
-          <span class="header-title" style="font-size: 17px; font-weight: 800; color: #000000;">Kameti AI</span>
-          <button id="btn-voice-profile" class="btn-icon-header" style="width: 38px; height: 38px; border-radius: 50%; background: #F4F4F5; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;">
-            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="2"><circle cx="12" cy="7" r="4"></circle><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path></svg>
+          <span class="header-title">Kameti AI</span>
+          <button id="btn-voice-profile" class="btn-icon-header">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="7" r="4"></circle><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path></svg>
           </button>
         </div>
 
