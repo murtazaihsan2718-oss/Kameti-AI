@@ -176,8 +176,13 @@ class KametiApp {
 
     renderOnboardingView(this.appRoot, {
       onComplete: (user) => {
-        authService.loginAsUser(user);
-        this.showToast(`Welcome, ${user.name}!`);
+        const u = user || authService.getCurrentUser() || { name: 'Member' };
+        if (typeof authService.loginAsUser === 'function') {
+          authService.loginAsUser(u);
+        } else {
+          storageService.setCurrentUser(u);
+        }
+        this.showToast(`Welcome, ${u.name || 'Member'}!`);
         const pendingCode = sessionStorage.getItem('pending_join_code');
         if (pendingCode) {
           sessionStorage.removeItem('pending_join_code');

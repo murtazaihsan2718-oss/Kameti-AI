@@ -15,6 +15,20 @@ class AuthService {
     return storageService.getCurrentUser();
   }
 
+  loginAsUser(user) {
+    if (!user) return;
+    storageService.setCurrentUser(user);
+    const users = storageService.getUsers();
+    const idx = users.findIndex(u => u.id === user.id || (u.verifiedPhone && u.verifiedPhone === user.verifiedPhone));
+    if (idx >= 0) {
+      users[idx] = user;
+    } else {
+      users.push(user);
+    }
+    storageService.setUsers(users);
+    return user;
+  }
+
   isLoggedIn() {
     return !!this.getCurrentUser();
   }
