@@ -156,15 +156,23 @@ module.exports = async (req, res) => {
     return res.status(204).end();
   }
 
-  const url = req.url || '';
+  const url = (req.url || '').toLowerCase();
 
-  if (url.includes('/health') || url === '/' || url === '/api') {
-    return res.status(200).json({ status: 'ok', message: 'Kameti AI Serverless Backend is running 24/7!' });
+  // 1. Health check or root
+  if (url === '' || url === '/' || url.includes('health') || url.includes('api')) {
+    if (!url.includes('chat') && !url.includes('transcribe') && !url.includes('speech')) {
+      return res.status(200).json({ status: 'ok', message: 'Kameti AI 24/7 Cloud Backend is live!' });
+    }
   }
 
-  if (url.includes('/chatWithAssistant')) {
+  // 2. Chat with Assistant
+  if (url.includes('chat') || url.includes('assistant')) {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
-    const { messages, userContext } = req.body || {};
+    let body = req.body;
+    if (typeof body === 'string') {
+      try { body = JSON.parse(body); } catch(e) {}
+    }
+    const { messages, userContext } = body || {};
     const apiKey = process.env.GEMINI_API_KEY || 'AQ.Ab8RN6J6X47Dk-OizvBvLZGHKaAzzRqxNm9BuHdHSa5m5vlOqA';
 
     try {
@@ -176,9 +184,14 @@ module.exports = async (req, res) => {
     }
   }
 
-  if (url.includes('/transcribeAudio')) {
+  // 3. Audio Transcription
+  if (url.includes('transcribe') || url.includes('audio')) {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
-    const { language = 'en' } = req.body || {};
+    let body = req.body;
+    if (typeof body === 'string') {
+      try { body = JSON.parse(body); } catch(e) {}
+    }
+    const { language = 'en' } = body || {};
     const simulatedText = language === 'ur'
       ? 'میری اس مہینے کی کمیٹی کی ادائیگی کتنی ہے؟'
       : 'How much do I have to pay in total this month?';
@@ -186,9 +199,14 @@ module.exports = async (req, res) => {
     return res.status(200).json({ success: true, text: simulatedText, language });
   }
 
-  if (url.includes('/textToSpeech')) {
+  // 4. Text-to-Speech
+  if (url.includes('speech') || url.includes('tts')) {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
-    const { text, language = 'en' } = req.body || {};
+    let body = req.body;
+    if (typeof body === 'string') {
+      try { body = JSON.parse(body); } catch(e) {}
+    }
+    const { text, language = 'en' } = body || {};
     if (!text) return res.status(400).json({ error: 'text is required' });
 
     try {
@@ -210,5 +228,5 @@ module.exports = async (req, res) => {
     }
   }
 
-  return res.status(200).json({ status: 'ok', message: 'Kameti AI API is live!' });
+  return res.status(200).json({ status: 'ok', message: 'Kameti AI 24/7 API is live!' });
 };
