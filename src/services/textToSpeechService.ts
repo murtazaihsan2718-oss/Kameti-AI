@@ -49,6 +49,10 @@ export function detectSpeechLanguage(text: string): 'ur' | 'en' {
 function getCandidateTTSEndpoints(): string[] {
   const endpoints: string[] = [];
 
+  // 1. Production 24/7 Cloud Backend (Highest Priority)
+  endpoints.push('https://kameti-ai-ten.vercel.app/api/textToSpeech');
+
+  // 2. Dynamic host resolution from Expo Go debugger host
   const hostUri = Constants.expoConfig?.hostUri || (Constants as any).manifest?.debuggerHost;
   if (hostUri) {
     const ip = hostUri.split(':')[0];
@@ -57,6 +61,7 @@ function getCandidateTTSEndpoints(): string[] {
     }
   }
 
+  // 3. Dynamic host resolution from React Native bundle scriptURL
   const scriptURL = NativeModules.SourceCode?.scriptURL;
   if (scriptURL) {
     const match = scriptURL.match(/https?:\/\/([^/:]+)/);
@@ -68,9 +73,9 @@ function getCandidateTTSEndpoints(): string[] {
     }
   }
 
+  // 4. Static candidate fallbacks
   const fallbacks = [
-    'http://192.168.1.17:3000/api/textToSpeech',
-    'http://192.168.1.8:3000/api/textToSpeech',
+    'http://192.168.18.144:3000/api/textToSpeech',
     'http://localhost:3000/api/textToSpeech',
     'http://10.0.2.2:3000/api/textToSpeech',
   ];

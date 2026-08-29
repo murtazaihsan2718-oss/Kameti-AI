@@ -26,7 +26,10 @@ const CLIENT_REQUEST_TIMEOUT_MS = 35000;
 function getCandidateEndpoints(): string[] {
   const endpoints: string[] = [];
 
-  // 1. Dynamic host resolution from Expo Go debugger host (e.g. "192.168.1.17:8081" -> "192.168.1.17")
+  // 1. Production 24/7 Cloud Backend (Highest Priority)
+  endpoints.push('https://kameti-ai-ten.vercel.app/api/chatWithAssistant');
+
+  // 2. Dynamic host resolution from Expo Go debugger host (e.g. "192.168.18.144:8081")
   const hostUri = Constants.expoConfig?.hostUri || (Constants as any).manifest?.debuggerHost;
   if (hostUri) {
     const ip = hostUri.split(':')[0];
@@ -35,7 +38,7 @@ function getCandidateEndpoints(): string[] {
     }
   }
 
-  // 2. Dynamic host resolution from React Native bundle scriptURL
+  // 3. Dynamic host resolution from React Native bundle scriptURL
   const scriptURL = NativeModules.SourceCode?.scriptURL;
   if (scriptURL) {
     const match = scriptURL.match(/https?:\/\/([^/:]+)/);
@@ -47,13 +50,11 @@ function getCandidateEndpoints(): string[] {
     }
   }
 
-  // 3. Static candidate fallbacks
+  // 4. Static candidate fallbacks
   const fallbacks = [
-    'http://192.168.1.17:3000/api/chatWithAssistant',
-    'http://192.168.1.8:3000/api/chatWithAssistant',
+    'http://192.168.18.144:3000/api/chatWithAssistant',
     'http://localhost:3000/api/chatWithAssistant',
     'http://10.0.2.2:3000/api/chatWithAssistant',
-    'https://chatwithassistant-g-w2367g9stx-uc.a.run.app',
   ];
 
   for (const fb of fallbacks) {
