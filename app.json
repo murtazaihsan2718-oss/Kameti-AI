@@ -33,6 +33,7 @@
         "backgroundColor": "#FFFFFF"
       },
       "package": "com.kameti.mobile",
+      "softInputMode": "adjustResize",
       "permissions": [
         "android.permission.RECORD_AUDIO"
       ]
