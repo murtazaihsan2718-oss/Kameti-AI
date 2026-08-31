@@ -571,6 +571,41 @@ function transliterateRomanUrdu(text) {
   return result.join('').replace(/[*_#`~>]/g, '').trim();
 }
 
+function isUrduOrRomanUrdu(text, explicitLanguage) {
+  if (explicitLanguage === 'ur') return true;
+  if (explicitLanguage === 'en') return false;
+  if (!text) return false;
+
+  // 1. Urdu Arabic script
+  if (/[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF]/.test(text)) {
+    return true;
+  }
+
+  // 2. Count distinct Roman Urdu words
+  const cleanLower = text.toLowerCase();
+  const romanUrduKeywords = new Set([
+    'aap', 'aapki', 'aapka', 'aapke', 'apki', 'apka', 'apke', 'meri', 'mera', 'mere',
+    'bari', 'baari', 'paise', 'paisa', 'kitne', 'kitna', 'kitnay', 'kitni', 'kist', 'kisht',
+    'kahan', 'kaun', 'kiski', 'bheje', 'bhejo', 'jama', 'nahi', 'nhi', 'nai',
+    'karega', 'karna', 'karun', 'karein', 'karta', 'karte', 'karti',
+    'mujhe', 'mujhey', 'humein', 'batao', 'bataiye', 'bataen', 'chahiye',
+    'hogi', 'hoga', 'hain', 'kyun', 'kaise', 'kesy', 'kese', 'milenge', 'milega', 'milna',
+    'mahine', 'mahina', 'adaigi', 'intezar', 'shamil', 'tareeqa', 'tareeqakar', 'bachat', 'zariya',
+    'kameti', 'kamaiti', 'beesi', 'bisi'
+  ]);
+
+  const words = cleanLower.match(/[a-z]+/g) || [];
+  let romanUrduWordCount = 0;
+
+  for (const w of words) {
+    if (romanUrduKeywords.has(w)) {
+      romanUrduWordCount++;
+    }
+  }
+
+  return romanUrduWordCount >= 2 || (words.length > 0 && romanUrduWordCount / words.length >= 0.15);
+}
+
 /**
  * Cloud Function endpoint: textToSpeech
  */
@@ -601,13 +636,12 @@ exports.textToSpeech = onRequest({ cors: true }, async (req, res) => {
       });
     }
 
-    const isUrduScript = /[\u0600-\u06FF]/.test(text);
-    const isRomanUrdu = /meri|mera|mere|bari|baari|paise|paisa|kitne|kitna|kitnay|kab|kahan|kon|kaun|kis|kisi|kiski|bheje|bhejo|jama|nahi|nai|nhi|karega|karo|karna|karun|mujhe|mujhey|humein|hum|aap|ap|batao|bataiye|bataen|kist|kisht|chahiye|hogi|hoga|hai|hain|kya|kyun|kyu|kaise|kesy|kese|milenge|milega|milna|lena|dena|dene|kitni|kameti|kamaiti|beesi|bisi/i.test(text);
+    const isUrdu = isUrduOrRomanUrdu(text, language);
 
     let targetLang = 'en';
     let textToSpeak = text.replace(/[*_#`~>]/g, '').trim();
 
-    if (isUrduScript || isRomanUrdu || language === 'ur') {
+    if (isUrdu) {
       targetLang = 'ur';
       textToSpeak = transliterateRomanUrdu(textToSpeak);
     }

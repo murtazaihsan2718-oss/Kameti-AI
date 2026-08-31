@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, Pressable, Platform, SafeAreaView, StatusBar as RNStatusBar, Animated, Easing, Keyboard } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Linking from 'expo-linking';
 import * as NavigationBar from 'expo-navigation-bar';
 import { LayoutGrid, Bot, Clock } from 'lucide-react-native';
@@ -54,12 +55,10 @@ export default function App() {
   }, [currentScreenKey]);
 
   useEffect(() => {
-    // Hide top status bar icons
-    RNStatusBar.setHidden(true, 'none');
-
     if (Platform.OS === 'android') {
       RNStatusBar.setTranslucent(true);
       RNStatusBar.setBackgroundColor('transparent');
+      RNStatusBar.setBarStyle('dark-content');
       // Hide Android bottom system navigation bar in sticky immersive mode
       NavigationBar.setVisibilityAsync('hidden').catch(() => {});
       NavigationBar.setBehaviorAsync('overlay-swipe').catch(() => {});
@@ -326,90 +325,92 @@ export default function App() {
     topPaddingValue = 28;
   }
 
-  if (!currentUser) {
-    return (
-      <SafeAreaView style={[styles.safeArea, { paddingTop: topPaddingValue }]}>
-        <StatusBar hidden={true} translucent={true} backgroundColor="transparent" />
-        <OnboardingScreen
-          onComplete={(user) => {
-            setCurrentUser(user);
-            setActiveScreen('home');
-            setCurrentTab('home');
-          }}
-        />
-      </SafeAreaView>
-    );
-  }
-
   return (
-    <SafeAreaView style={[styles.safeArea, { paddingTop: topPaddingValue }]}>
-      {/* 100% hidden status bar with zero black cutout bar */}
-      <StatusBar hidden={true} translucent={true} backgroundColor="transparent" />
-
-      {/* Main Screen Content with Smooth Transition Animation */}
-      <Animated.View
-        style={[
-          styles.content,
-          {
-            opacity: screenFadeAnim,
-            transform: [{ translateY: screenTranslateY }],
-          },
-        ]}
-      >
-        {renderActiveScreen()}
-      </Animated.View>
-
-      {/* Modern Floating Dock Navigation Bar with Tactile Haptic Feedback (hidden when typing) */}
-      {!isKeyboardOpen && (
-        <View style={styles.floatingDockContainer}>
-          <View style={styles.floatingDock}>
-            <TactilePressable
-              haptic="selection"
-              scaleTo={0.92}
-              style={[styles.dockItem, isHomeActive && styles.dockItemActive]}
-              onPress={() => {
-                setCurrentTab('home');
-                setActiveScreen('home');
-              }}
+    <SafeAreaProvider style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+      <StatusBar
+        backgroundColor="transparent"
+        hidden={false}
+        style="dark"
+        translucent={true}
+      />
+      <SafeAreaView style={[styles.safeArea, { paddingTop: topPaddingValue }]}>
+        {!currentUser ? (
+          <OnboardingScreen
+            onComplete={(user) => {
+              setCurrentUser(user);
+              setActiveScreen('home');
+              setCurrentTab('home');
+            }}
+          />
+        ) : (
+          <>
+            {/* Main Screen Content with Smooth Transition Animation */}
+            <Animated.View
+              style={[
+                styles.content,
+                {
+                  opacity: screenFadeAnim,
+                  transform: [{ translateY: screenTranslateY }],
+                },
+              ]}
             >
-              <LayoutGrid size={18} color={homeIconColor} />
-              <Text style={[styles.dockText, isHomeActive && styles.dockTextActive]}>
-                Home
-              </Text>
-            </TactilePressable>
+              {renderActiveScreen()}
+            </Animated.View>
 
-            <TactilePressable
-              haptic="selection"
-              scaleTo={0.92}
-              style={[styles.dockItem, isVoiceActive && styles.dockItemActive]}
-              onPress={() => {
-                setCurrentTab('voice');
-              }}
-            >
-              <Bot size={18} color={voiceIconColor} />
-              <Text style={[styles.dockText, isVoiceActive && styles.dockTextActive]}>
-                Ask
-              </Text>
-            </TactilePressable>
+            {/* Modern Floating Dock Navigation Bar with Tactile Haptic Feedback (hidden when typing) */}
+            {!isKeyboardOpen && (
+              <View style={styles.floatingDockContainer}>
+                <View style={styles.floatingDock}>
+                  <TactilePressable
+                    haptic="selection"
+                    scaleTo={0.92}
+                    style={[styles.dockItem, isHomeActive && styles.dockItemActive]}
+                    onPress={() => {
+                      setCurrentTab('home');
+                      setActiveScreen('home');
+                    }}
+                  >
+                    <LayoutGrid size={18} color={homeIconColor} />
+                    <Text style={[styles.dockText, isHomeActive && styles.dockTextActive]}>
+                      Home
+                    </Text>
+                  </TactilePressable>
 
-            <TactilePressable
-              haptic="selection"
-              scaleTo={0.92}
-              style={[styles.dockItem, isActivityActive && styles.dockItemActive]}
-              onPress={() => {
-                setCurrentTab('activity');
-                setActiveScreen('home');
-              }}
-            >
-              <Clock size={18} color={activityIconColor} />
-              <Text style={[styles.dockText, isActivityActive && styles.dockTextActive]}>
-                Activity
-              </Text>
-            </TactilePressable>
-          </View>
-        </View>
-      )}
-    </SafeAreaView>
+                  <TactilePressable
+                    haptic="selection"
+                    scaleTo={0.92}
+                    style={[styles.dockItem, isVoiceActive && styles.dockItemActive]}
+                    onPress={() => {
+                      setCurrentTab('voice');
+                    }}
+                  >
+                    <Bot size={18} color={voiceIconColor} />
+                    <Text style={[styles.dockText, isVoiceActive && styles.dockTextActive]}>
+                      Ask
+                    </Text>
+                  </TactilePressable>
+
+                  <TactilePressable
+                    haptic="selection"
+                    scaleTo={0.92}
+                    style={[styles.dockItem, isActivityActive && styles.dockItemActive]}
+                    onPress={() => {
+                      setCurrentTab('activity');
+                      setActiveScreen('home');
+                    }}
+                  >
+                    <Clock size={18} color={activityIconColor} />
+                    <Text style={[styles.dockText, isActivityActive && styles.dockTextActive]}>
+                      Activity
+                    </Text>
+                  </TactilePressable>
+                </View>
+              </View>
+            )}
+          </>
+        )}
+      </SafeAreaView>
+    </SafeAreaProvider>
   );
 }
 
