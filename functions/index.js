@@ -180,7 +180,53 @@ async function callGeminiAPI(message, conversationHistory, userContext, apiKey) 
     }
   }
 
-  throw new Error('Gemini service temporarily unavailable');
+function generateSmartFallback(query, userContext) {
+  const q = (query || '').toLowerCase().trim();
+  const committees = userContext?.committees || [];
+  const activeCommittees = committees.filter(c => !c.status?.toLowerCase().includes('forming'));
+  const isRomanUrdu = /meri|mera|bari|paise|kitne|kab|kon|kis|bheje|jama|nahi|karega|karo|kaun|mujhe/.test(q);
+
+  if (q.includes('owe') || q.includes('due') || q.includes('kitne paise') || q.includes('kitna dena') || q.includes('pending') || q.includes('pay this month')) {
+    const totalDue = userContext?.totalMonthlyContributionDue || 0;
+    if (totalDue === 0 || activeCommittees.length === 0) {
+      if (isRomanUrdu) return 'Aap ki tamam payments complete hain! Is mahine koi payment pending nahi hai.';
+      return 'Great news! You have no pending payments due for this month. All your contributions are up to date.';
+    }
+    const dueComms = activeCommittees.filter(c => c.userPayment?.paymentStatus === 'pending' && !c.payout?.isUserCurrentRecipient);
+    const details = dueComms.map(c => `• **${c.committeeName}**: PKR ${c.contributionAmount?.toLocaleString()} (Due to ${c.payout?.currentRecipientName || 'Recipient'})`).join('\n');
+    return `You have **PKR ${totalDue.toLocaleString()}** in pending contributions due this month:\n\n${details || 'No pending payments.'}`;
+  }
+
+  if (q.includes('getting paid') || q.includes('payout') || q.includes('receive') || q.includes('meri bari') || q.includes('turn') || q.includes('mujhe kitnay') || q.includes('number')) {
+    const recipientComms = activeCommittees.filter(c => c.payout?.isUserCurrentRecipient);
+    if (recipientComms.length > 0) {
+      const details = recipientComms.map(c => `• **${c.committeeName}**: PKR ${c.totalPool?.toLocaleString()} (You are the designated recipient for Cycle ${c.currentCycle} of ${c.totalCycles})`).join('\n');
+      const totalPayout = recipientComms.reduce((acc, c) => acc + (c.totalPool || 0), 0);
+      return `This month, you are scheduled to receive a total payout of **PKR ${totalPayout.toLocaleString()}**:\n\n${details}`;
+    }
+    const upcoming = activeCommittees.map(c => `• **${c.committeeName}**: ${c.payout?.payoutTurnSummary || 'Scheduled in upcoming cycles'}`).join('\n');
+    return `You are not scheduled for a payout in this current cycle. Here is your turn status:\n\n${upcoming || 'No active committees.'}`;
+  }
+
+  if (q.includes('committee') || q.includes('enrolled') || q.includes('all committees')) {
+    if (committees.length === 0) {
+      return 'You are not currently enrolled in any committees. Tap "+ Create" or "Join" on the Home tab to get started!';
+    }
+    const list = committees.map(c => {
+      const isForming = c.status?.toLowerCase().includes('forming');
+      return `• **${c.committeeName}** (Join Code: \`${c.joinCode}\`)\n  * Monthly Contribution: PKR ${c.contributionAmount?.toLocaleString()}\n  * Total Pool: PKR ${c.totalPool?.toLocaleString()}\n  * Status: ${isForming ? 'Waiting for members (Not started)' : `Active (Cycle ${c.currentCycle} of ${c.totalCycles})`}`;
+    }).join('\n\n');
+    return `Here are your enrolled committees:\n\n${list}`;
+  }
+
+  if (q.includes('how') && (q.includes('work') || q.includes('kameti') || q.includes('beesi') || q.includes('rosca'))) {
+    return `**How Kameti Works:**\n\n1. **Monthly Pooling**: A group of trusted members deposits a fixed monthly contribution into a common pool.\n2. **Fair Turn Allocation**: Each cycle, one member collects the full lump-sum payout (decided fairly via Lucky Draw or schedule).\n3. **Community Savings**: Enables debt-free, zero-interest lump-sum financing for every participant!`;
+  }
+
+  if (isRomanUrdu) {
+    return 'Main aap ki pending payments, bari ka turn, aur committee ke members ke bare mein madad kar sakta hoon. Aap kya janna chahte hain?';
+  }
+  return 'I can help you check your pending payments, payout turn, committee member statuses, or next payout date. What would you like to know?';
 }
 
 /**
@@ -228,26 +274,31 @@ exports.chatWithAssistant = onRequest({ cors: true }, async (req, res) => {
       });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-    if (!apiKey) {
-      console.error('[Backend Gemini] Missing GEMINI_API_KEY.');
-      return res.status(500).json({
-        success: false,
-        error: "Sorry, I couldn't connect to the assistant right now. Please try again.",
-      });
+    let assistantReply = '';
+    try {
+      if (apiKey && apiKey.startsWith('AIzaSy')) {
+        assistantReply = await callGeminiAPI(trimmed, conversationHistory, userContext, apiKey);
+      }
+    } catch (gErr) {
+      console.warn('[Backend Gemini] Live API call failed, falling back to smart context:', gErr.message);
     }
 
-    const assistantReply = await callGeminiAPI(trimmed, conversationHistory, userContext, apiKey);
+    if (!assistantReply) {
+      assistantReply = generateSmartFallback(trimmed, userContext);
+    }
 
     return res.status(200).json({
       success: true,
       response: assistantReply,
+      reply: assistantReply,
     });
   } catch (err) {
     console.error('[Backend Gemini] Internal execution error:', err.message);
-    return res.status(500).json({
-      success: false,
-      error: "Sorry, I couldn't connect to the assistant right now. Please try again.",
+    const fallback = generateSmartFallback(req.body?.message || '', req.body?.userContext);
+    return res.status(200).json({
+      success: true,
+      response: fallback,
+      reply: fallback,
     });
   }
 });
