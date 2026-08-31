@@ -193,6 +193,55 @@ async function callGeminiWithBackoff(requestPayload, apiKey) {
   throw new Error('Gemini request failed after retries');
 }
 
+function generateSmartFallback(query, userContext) {
+  const q = (query || '').toLowerCase().trim();
+  const committees = userContext?.committees || [];
+  const activeCommittees = committees.filter(c => !c.status?.toLowerCase().includes('forming'));
+  const isRomanUrdu = /meri|mera|bari|paise|kitne|kab|kon|kis|bheje|jama|nahi|karega|karo|kaun|mujhe/.test(q);
+
+  if (q.includes('owe') || q.includes('due') || q.includes('kitne paise') || q.includes('kitna dena') || q.includes('pending') || q.includes('pay this month')) {
+    const totalDue = userContext?.totalMonthlyContributionDue || 0;
+    if (totalDue === 0 || activeCommittees.length === 0) {
+      if (isRomanUrdu) return 'Aap ki tamam payments complete hain! Is mahine koi payment pending nahi hai.';
+      return 'Great news! You have no pending payments due for this month. All your contributions are up to date.';
+    }
+    const dueComms = activeCommittees.filter(c => c.userPayment?.paymentStatus === 'pending' && !c.payout?.isUserCurrentRecipient);
+    const details = dueComms.map(c => `• **${c.committeeName}**: PKR ${c.contributionAmount?.toLocaleString()} (Due to ${c.payout?.currentRecipientName || 'Recipient'})`).join('\n');
+    return `You have **PKR ${totalDue.toLocaleString()}** in pending contributions due this month:\n\n${details || 'No pending payments.'}`;
+  }
+
+  if (q.includes('getting paid') || q.includes('payout') || q.includes('receive') || q.includes('meri bari') || q.includes('turn') || q.includes('mujhe kitnay') || q.includes('number')) {
+    const recipientComms = activeCommittees.filter(c => c.payout?.isUserCurrentRecipient);
+    if (recipientComms.length > 0) {
+      const details = recipientComms.map(c => `• **${c.committeeName}**: PKR ${c.totalPool?.toLocaleString()} (You are the designated recipient for Cycle ${c.currentCycle} of ${c.totalCycles})`).join('\n');
+      const totalPayout = recipientComms.reduce((acc, c) => acc + (c.totalPool || 0), 0);
+      return `This month, you are scheduled to receive a total payout of **PKR ${totalPayout.toLocaleString()}**:\n\n${details}`;
+    }
+    const upcoming = activeCommittees.map(c => `• **${c.committeeName}**: ${c.payout?.payoutTurnSummary || 'Scheduled in upcoming cycles'}`).join('\n');
+    return `You are not scheduled for a payout in this current cycle. Here is your turn status:\n\n${upcoming || 'No active committees.'}`;
+  }
+
+  if (q.includes('committee') || q.includes('enrolled') || q.includes('all committees')) {
+    if (committees.length === 0) {
+      return 'You are not currently enrolled in any committees. Tap "+ Create" or "Join" on the Home tab to get started!';
+    }
+    const list = committees.map(c => {
+      const isForming = c.status?.toLowerCase().includes('forming');
+      return `• **${c.committeeName}** (Join Code: \`${c.joinCode}\`)\n  * Monthly Contribution: PKR ${c.contributionAmount?.toLocaleString()}\n  * Total Pool: PKR ${c.totalPool?.toLocaleString()}\n  * Status: ${isForming ? 'Waiting for members (Not started)' : `Active (Cycle ${c.currentCycle} of ${c.totalCycles})`}`;
+    }).join('\n\n');
+    return `Here are your enrolled committees:\n\n${list}`;
+  }
+
+  if (q.includes('how') && (q.includes('work') || q.includes('kameti') || q.includes('beesi') || q.includes('rosca'))) {
+    return `**How Kameti Works:**\n\n1. **Monthly Pooling**: A group of trusted members deposits a fixed monthly contribution into a common pool.\n2. **Fair Turn Allocation**: Each cycle, one member collects the full lump-sum payout (decided fairly via Lucky Draw or schedule).\n3. **Community Savings**: Enables debt-free, zero-interest lump-sum financing for every participant!`;
+  }
+
+  if (isRomanUrdu) {
+    return 'Main aap ki pending payments, bari ka turn, aur committee ke members ke bare mein madad kar sakta hoon. Aap kya janna chahte hain?';
+  }
+  return 'I can help you check your pending payments, payout turn, committee member statuses, or next payout date. What would you like to know?';
+}
+
 async function handleChatWithAssistant(req, res) {
   let body = '';
   req.on('data', chunk => {
@@ -205,73 +254,61 @@ async function handleChatWithAssistant(req, res) {
   req.on('end', async () => {
     try {
       const parsed = JSON.parse(body || '{}');
-      const { message, conversationHistory, userContext } = parsed;
+      const { message, messages, conversationHistory, userContext } = parsed;
 
-      // 1. Validation
-      if (!message || typeof message !== 'string') {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify({ success: false, error: 'Message is required and must be a string.' }));
-      }
+      const userText = (message || (Array.isArray(messages) && messages.length > 0 ? messages[messages.length - 1]?.text : '') || '').trim();
 
-      const trimmed = message.trim();
-      if (!trimmed) {
+      if (!userText) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({ success: false, error: 'Message cannot be empty.' }));
       }
 
-      if (trimmed.length > 1000) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify({ success: false, error: 'Message exceeds maximum length of 1000 characters.' }));
-      }
+      let reply = '';
+      try {
+        const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+        if (apiKey && apiKey.startsWith('AIzaSy')) {
+          const contents = [];
+          const history = Array.isArray(conversationHistory) 
+            ? conversationHistory 
+            : (Array.isArray(messages) ? messages.slice(0, -1) : []);
 
-      // 2. Secret Key
-      const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-      if (!apiKey) {
-        console.error('[Server Backend] Missing GEMINI_API_KEY in environment.');
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify({ success: false, error: "Sorry, I couldn't connect to the assistant right now. Please check your GEMINI_API_KEY." }));
-      }
-
-      // 3. Build contents
-      const contents = [];
-      if (Array.isArray(conversationHistory) && conversationHistory.length > 0) {
-        const recent = conversationHistory.slice(-6);
-        for (const m of recent) {
-          if (m && m.text && typeof m.text === 'string' && m.text.trim()) {
-            contents.push({
-              role: m.sender === 'user' ? 'user' : 'model',
-              parts: [{ text: m.text.trim() }],
-            });
+          for (const m of history) {
+            if (m && m.text && typeof m.text === 'string' && m.text.trim()) {
+              contents.push({
+                role: m.sender === 'user' ? 'user' : 'model',
+                parts: [{ text: m.text.trim() }],
+              });
+            }
           }
+
+          contents.push({
+            role: 'user',
+            parts: [{ text: userText }],
+          });
+
+          const systemInstructionText = buildSystemInstruction(userContext);
+          const requestPayload = {
+            system_instruction: { parts: [{ text: systemInstructionText }] },
+            contents,
+            generationConfig: { temperature: 0.7, maxOutputTokens: 1500 },
+          };
+          reply = await callGeminiWithBackoff(requestPayload, apiKey);
         }
+      } catch (gErr) {
+        console.warn('[Server Backend] Gemini API call failed, falling back to smart context:', gErr.message);
       }
 
-      contents.push({
-        role: 'user',
-        parts: [{ text: trimmed }],
-      });
-
-      const systemInstructionText = buildSystemInstruction(userContext);
-
-      const requestPayload = {
-        system_instruction: {
-          parts: [{ text: systemInstructionText }],
-        },
-        contents,
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 1500,
-        },
-      };
-
-      const reply = await callGeminiWithBackoff(requestPayload, apiKey);
+      if (!reply) {
+        reply = generateSmartFallback(userText, userContext);
+      }
 
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({ success: true, response: reply }));
+      return res.end(JSON.stringify({ success: true, response: reply, reply: reply }));
     } catch (err) {
       console.error('[Server Backend] Request processing failed:', err.message);
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({ success: false, error: "Sorry, I couldn't connect to the assistant right now. Please try again." }));
+      const fallback = generateSmartFallback('', null);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ success: true, response: fallback, reply: fallback }));
     }
   });
 }
