@@ -180,6 +180,9 @@ async function callGeminiAPI(message, conversationHistory, userContext, apiKey) 
     }
   }
 
+  throw new Error('Gemini service temporarily unavailable');
+}
+
 function generateSmartFallback(query, userContext) {
   const q = (query || '').toLowerCase().trim();
   const committees = userContext?.committees || [];

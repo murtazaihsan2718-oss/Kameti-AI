@@ -149,22 +149,8 @@ class AIService {
               response: replyText,
             };
           }
-          if (data && data.error) {
-            console.warn(`[AIService] Backend returned error: ${data.error}`);
-            return {
-              success: false,
-              error: data.error,
-            };
-          }
         } else {
-          const errorData = await response.json().catch(() => ({}));
-          console.warn(`[AIService] HTTP Error ${response.status}:`, errorData);
-          if (errorData && errorData.error) {
-            return {
-              success: false,
-              error: errorData.error,
-            };
-          }
+          console.warn(`[AIService] HTTP Error ${response.status} from ${endpoint}`);
           lastErrorMessage = `Server returned HTTP ${response.status}`;
         }
       } catch (err: any) {
