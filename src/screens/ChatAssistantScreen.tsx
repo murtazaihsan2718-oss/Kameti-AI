@@ -155,7 +155,7 @@ export const ChatAssistantScreen: React.FC<ChatAssistantScreenProps> = ({
   onBack,
   onOpenProfile,
 }) => {
-  const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => aiService.getSessionMessages());
   const [inputText, setInputText] = useState('');
   const [isAssistantTyping, setIsAssistantTyping] = useState(false);
   const [isKeyboardVisible, setKeyboardVisible] = useState(false);
@@ -292,6 +292,7 @@ export const ChatAssistantScreen: React.FC<ChatAssistantScreenProps> = ({
 
     const updatedHistory = [...messages, userMessage];
     setMessages(updatedHistory);
+    aiService.setSessionMessages(updatedHistory);
     setIsAssistantTyping(true);
 
     try {
@@ -313,7 +314,9 @@ export const ChatAssistantScreen: React.FC<ChatAssistantScreenProps> = ({
         timestamp: replyTime,
       };
 
-      setMessages(prev => [...prev, assistantMessage]);
+      const finalHistory = [...updatedHistory, assistantMessage];
+      setMessages(finalHistory);
+      aiService.setSessionMessages(finalHistory);
 
       // Speak assistant response aloud if not muted
       if (!isMuted && assistantText) {
@@ -331,13 +334,16 @@ export const ChatAssistantScreen: React.FC<ChatAssistantScreenProps> = ({
         });
       }
     } catch (err: any) {
-      const errorMsg: ChatMessage = {
-        id: `asst_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      const replyTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const errorMessage: ChatMessage = {
+        id: `asst_err_${Date.now()}`,
         sender: 'assistant',
-        text: "Sorry, I couldn't connect to the assistant right now. Please try again.",
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        text: 'Sorry, I encountered a temporary connection issue. Please try again.',
+        timestamp: replyTime,
       };
-      setMessages(prev => [...prev, errorMsg]);
+      const finalHistory = [...updatedHistory, errorMessage];
+      setMessages(finalHistory);
+      aiService.setSessionMessages(finalHistory);
     } finally {
       setIsAssistantTyping(false);
     }

@@ -19,6 +19,7 @@ import { NotificationsScreen } from './src/screens/NotificationsScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { ChatAssistantScreen } from './src/screens/ChatAssistantScreen';
 import { TactilePressable } from './src/components/TactilePressable';
+import { aiService } from './src/services/aiService';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
@@ -81,9 +82,7 @@ export default function App() {
 
     const unsubStorage = nativeStorageService.subscribe(async () => {
       const user = await nativeStorageService.getUser();
-      if (user) {
-        setCurrentUser(user);
-      }
+      setCurrentUser(user);
     });
 
     const handleUrl = async (url: string | null) => {
@@ -229,6 +228,8 @@ export default function App() {
         <ProfileScreen
           onBack={() => setActiveScreen('home')}
           onLogout={() => {
+            setCurrentUser(null);
+            aiService.clearSession();
             setActiveScreen('home');
             setCurrentTab('home');
           }}

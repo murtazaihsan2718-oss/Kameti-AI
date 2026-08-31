@@ -12,7 +12,7 @@ import { renderCommitteeRoomView } from './components/committeeRoomView.js';
 import { renderHistoryView } from './components/historyView.js';
 import { renderNotificationsView } from './components/notificationsView.js';
 import { renderProfileView } from './components/profileView.js';
-import { openVoiceAssistantModal } from './components/voiceAssistantModal.js';
+import { openVoiceAssistantModal, resetVoiceAssistantSession } from './components/voiceAssistantModal.js';
 
 class KametiApp {
   constructor() {
@@ -274,7 +274,10 @@ class KametiApp {
     this.showNavigationChrome();
     renderProfileView(this.appRoot, {
       onBack: () => this.navigate('home'),
-      onLogout: () => this.renderOnboarding(),
+      onLogout: () => {
+        resetVoiceAssistantSession();
+        this.renderOnboarding();
+      },
       onReload: () => this.renderProfile(),
       showToast: (msg) => this.showToast(msg)
     });

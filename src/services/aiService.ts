@@ -68,6 +68,33 @@ function getCandidateEndpoints(): string[] {
 
 class AIService {
   private activeEndpoint: string | null = null;
+  private sessionMessages: ChatHistoryItem[] = [
+    {
+      id: 'msg_welcome_1',
+      sender: 'assistant',
+      text: 'Hello! I am your Kameti AI Assistant. How can I help you today?',
+      timestamp: 'Just now',
+    },
+  ];
+
+  getSessionMessages(): ChatHistoryItem[] {
+    return [...this.sessionMessages];
+  }
+
+  setSessionMessages(messages: ChatHistoryItem[]) {
+    this.sessionMessages = messages;
+  }
+
+  clearSession() {
+    this.sessionMessages = [
+      {
+        id: 'msg_welcome_1',
+        sender: 'assistant',
+        text: 'Hello! I am your Kameti AI Assistant. How can I help you today?',
+        timestamp: 'Just now',
+      },
+    ];
+  }
 
   setCustomEndpoint(url: string) {
     this.activeEndpoint = url;

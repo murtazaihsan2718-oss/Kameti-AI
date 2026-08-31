@@ -3,6 +3,20 @@
 import { voiceAssistantService } from '../services/voiceAssistantService.js';
 import { authService } from '../services/authService.js';
 
+const INITIAL_ASSISTANT_MESSAGES = [
+  {
+    id: 'msg_welcome',
+    sender: 'assistant',
+    text: 'Hello! I am your Kameti AI Assistant. How can I help you today?',
+  },
+];
+
+let sessionMessages = [...INITIAL_ASSISTANT_MESSAGES];
+
+export function resetVoiceAssistantSession() {
+  sessionMessages = [...INITIAL_ASSISTANT_MESSAGES];
+}
+
 export function openVoiceAssistantModal({ onBack, onOpenProfile, showToast } = {}) {
   const container = document.getElementById('app-viewport');
   if (!container) return;
@@ -15,13 +29,7 @@ export function openVoiceAssistantModal({ onBack, onOpenProfile, showToast } = {
     'How does Kameti work?',
   ];
 
-  let messages = [
-    {
-      id: 'msg_welcome',
-      sender: 'assistant',
-      text: 'Hello! I am your Kameti AI Assistant. How can I help you today?',
-    },
-  ];
+  let messages = sessionMessages;
 
   let isListening = false;
   let activeSpeakingId = null;
