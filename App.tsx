@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable, Platform, SafeAreaView, StatusBar as
 import { StatusBar } from 'expo-status-bar';
 import * as Linking from 'expo-linking';
 import * as NavigationBar from 'expo-navigation-bar';
-import { LayoutGrid, Mic, Clock } from 'lucide-react-native';
+import { LayoutGrid, Bot, Clock } from 'lucide-react-native';
 import { colors } from './src/theme/theme';
 import { nativeStorageService } from './src/services/storageService';
 import { LinkingService } from './src/services/linkingService';
@@ -386,9 +386,9 @@ export default function App() {
                 setCurrentTab('voice');
               }}
             >
-              <Mic size={18} color={voiceIconColor} />
+              <Bot size={18} color={voiceIconColor} />
               <Text style={[styles.dockText, isVoiceActive && styles.dockTextActive]}>
-                Voice
+                Ask
               </Text>
             </TactilePressable>
 
