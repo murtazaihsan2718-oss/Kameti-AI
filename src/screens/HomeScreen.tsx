@@ -77,6 +77,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate, onOpenVoice 
         const local = await nativeStorageService.getCommittees();
         let hasChanges = false;
 
+        const existingNotifs = await nativeStorageService.getNotifications();
+        let notifsChanged = false;
+        const newNotifs = [...existingNotifs];
+
         cloudList.forEach(cc => {
           const matchIdx = local.findIndex(lc => 
             lc.id === cc.id || 
@@ -84,13 +88,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate, onOpenVoice 
           );
 
           let membersList: Member[] = cc.members || [];
+          const capacity = cc.totalCycles || cc.duration || cc.numberOfMembers || (matchIdx >= 0 ? (local[matchIdx].totalCycles || local[matchIdx].duration || local[matchIdx].memberCount) : cc.memberCount) || 5;
 
           if (matchIdx >= 0) {
             local[matchIdx] = {
               ...local[matchIdx],
               ...cc,
               members: membersList,
-              memberCount: membersList.length > 0 ? membersList.length : local[matchIdx].memberCount,
+              totalCycles: capacity,
+              duration: capacity,
+              memberCount: capacity,
+              numberOfMembers: capacity,
             };
             hasChanges = true;
           } else {
@@ -111,12 +119,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate, onOpenVoice 
                 name: cc.name,
                 joinCode: cc.joinCode,
                 contributionAmount: cc.contributionAmount,
-                memberCount: cc.memberCount || cc.numberOfMembers || 5,
-                totalPool: (cc.memberCount || 5) * cc.contributionAmount,
+                memberCount: capacity,
+                numberOfMembers: capacity,
+                totalPool: capacity * cc.contributionAmount,
                 startDate: cc.startDate || new Date().toISOString().split('T')[0],
-                totalCycles: cc.totalCycles || 5,
+                totalCycles: capacity,
                 currentRecipientId: cc.currentRecipientId || '',
-                duration: cc.totalCycles || 5,
+                duration: capacity,
                 frequency: cc.frequency === 'custom' ? 'custom' : 'monthly',
                 currentCycle: cc.currentCycle || 1,
                 status: cc.status || 'active',
@@ -129,10 +138,41 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate, onOpenVoice 
               hasChanges = true;
             }
           }
+
+          // Check if current user is recipient of this committee
+          const isFull = membersList.length >= capacity && Boolean(cc.currentRecipientId);
+          if (isFull && cc.currentRecipientId) {
+            const userPhone = normalizeDigits(currentUser.phone || '');
+            const isUserRecipient = (cc.currentRecipientId === currentUser.id) || membersList.some(m => {
+              const mPhone = normalizeDigits(m.phone || (m as any).verifiedPhone || '');
+              return (m.id === cc.currentRecipientId || (m as any).userId === cc.currentRecipientId) && 
+                     ((m.id === currentUser.id) || (userPhone && mPhone && userPhone === mPhone));
+            });
+
+            if (isUserRecipient) {
+              const notifTag = `rec_${cc.id}_${cc.currentRecipientId}`;
+              if (!newNotifs.some(n => n.id.includes(notifTag))) {
+                const totalPool = (cc.contributionAmount || 0) * capacity;
+                newNotifs.unshift({
+                  id: `notif_${notifTag}`,
+                  title: "You're this month's recipient! 🎉",
+                  body: `You are scheduled to receive PKR ${totalPool.toLocaleString()} from ${cc.name}.`,
+                  timestamp: 'Just now',
+                  read: false,
+                  committeeId: cc.id,
+                  type: 'payout_alert',
+                });
+                notifsChanged = true;
+              }
+            }
+          }
         });
 
         if (hasChanges) {
           await nativeStorageService.saveCommittees(local);
+        }
+        if (notifsChanged) {
+          await nativeStorageService.saveNotifications(newNotifs);
         }
         setCommittees(filterUserCommittees(local, currentUser));
       }

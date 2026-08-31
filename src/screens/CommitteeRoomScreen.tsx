@@ -123,24 +123,38 @@ export const CommitteeRoomScreen: React.FC<CommitteeRoomScreenProps> = ({
   };
 
   useEffect(() => {
+    let localJoinCode = '';
+    const loadCommittee = async () => {
+      const list = await nativeStorageService.getCommittees();
+      const found = list.find(c => c.id === committeeId);
+      if (found) {
+        localJoinCode = found.joinCode || '';
+        setCommittee(found);
+      } else {
+        setCommittee(null);
+        onBack();
+      }
+    };
+
     loadCommittee();
     const unsubLocal = nativeStorageService.subscribe(loadCommittee);
     
     // Live Cloud Firestore sync across multiple devices
     const unsubCloud = FirebaseService.subscribeCommittees((cloudList) => {
-      if (cloudList) {
-        if (cloudList.length > 0) {
-          const found = cloudList.find(c => c.id === committeeId || (committee && c.joinCode === committee.joinCode));
-          if (found) {
-            setCommittee(found);
-            nativeStorageService.getCommittees().then(localList => {
-              const idx = localList.findIndex(c => c.id === found.id || c.joinCode === found.joinCode);
-              if (idx >= 0) {
-                localList[idx] = found;
-                nativeStorageService.saveCommittees(localList);
-              }
-            });
-          }
+      if (cloudList && cloudList.length > 0) {
+        const found = cloudList.find(c => 
+          c.id === committeeId || 
+          (localJoinCode && c.joinCode && c.joinCode.toUpperCase() === localJoinCode.toUpperCase())
+        );
+        if (found) {
+          setCommittee(found);
+          nativeStorageService.getCommittees().then(localList => {
+            const idx = localList.findIndex(c => c.id === found.id || (found.joinCode && c.joinCode === found.joinCode));
+            if (idx >= 0) {
+              localList[idx] = { ...localList[idx], ...found };
+              nativeStorageService.saveCommittees(localList);
+            }
+          });
         }
       }
     });
@@ -164,14 +178,14 @@ export const CommitteeRoomScreen: React.FC<CommitteeRoomScreenProps> = ({
 
   let totalCycles = 5;
   if (committee) {
-    if (committee.memberCount) {
-      totalCycles = committee.memberCount;
-    } else if (committee.numberOfMembers) {
-      totalCycles = committee.numberOfMembers;
-    } else if (committee.totalCycles) {
+    if (committee.totalCycles) {
       totalCycles = committee.totalCycles;
     } else if (committee.duration) {
       totalCycles = committee.duration;
+    } else if (committee.numberOfMembers) {
+      totalCycles = committee.numberOfMembers;
+    } else if (committee.memberCount) {
+      totalCycles = committee.memberCount;
     }
   }
   totalCycles = Math.max(2, totalCycles);
@@ -189,7 +203,7 @@ export const CommitteeRoomScreen: React.FC<CommitteeRoomScreenProps> = ({
     if (isFull && committee && !committee.currentRecipientId && committee.members && committee.members.length >= totalCycles) {
       const randomIndex = Math.floor(Math.random() * committee.members.length);
       const chosen = committee.members[randomIndex];
-      const chosenId = chosen.id;
+      const chosenId = chosen.id || (chosen as any).userId;
       FirebaseService.updateRecipientWinner(committee.id, chosenId, 1);
     }
   }, [isFull, committee?.currentRecipientId, committee?.id, totalCycles]);
@@ -200,7 +214,7 @@ export const CommitteeRoomScreen: React.FC<CommitteeRoomScreenProps> = ({
       if (committee.members) {
         if (committee.members.length > 0) {
           if (committee.currentRecipientId) {
-            const foundRecipient = committee.members.find(m => m.id === committee.currentRecipientId || m.userId === committee.currentRecipientId);
+            const foundRecipient = committee.members.find(m => m.id === committee.currentRecipientId || (m as any).userId === committee.currentRecipientId);
             if (foundRecipient) {
               recipient = foundRecipient;
             }
@@ -218,7 +232,36 @@ export const CommitteeRoomScreen: React.FC<CommitteeRoomScreenProps> = ({
         if (!seen) {
           nativeStorageService.setItem(seenKey, 'true');
           setShouldAnimateSpin(true);
-          setCelebrationMessage(`🎉 ${recipient.name} is the recipient for Cycle 1!`);
+
+          const userPhone = (currentUser?.phone || '').replace(/[^0-9]/g, '');
+          const recPhone = (recipient.phone || '').replace(/[^0-9]/g, '');
+          const isUserRecipient = (recipient.id === currentUser?.id) || 
+                                 ((recipient as any).userId === currentUser?.id) ||
+                                 (userPhone && recPhone && userPhone === recPhone);
+
+          if (isUserRecipient) {
+            setCelebrationMessage(`🎉 Congratulations! You are the recipient for Cycle 1!`);
+            // Add in-app notification if not present
+            const notifTag = `rec_${committee.id}_${committee.currentRecipientId}`;
+            nativeStorageService.getNotifications().then(notifs => {
+              if (!notifs.some(n => n.id.includes(notifTag))) {
+                const totalPool = (committee.contributionAmount || 0) * totalCycles;
+                const newNotif = {
+                  id: `notif_${notifTag}`,
+                  committeeId: committee.id,
+                  type: 'payout_alert' as const,
+                  title: "You're this month's recipient! 🎉",
+                  body: `You are scheduled to receive PKR ${totalPool.toLocaleString()} from ${committee.name}.`,
+                  timestamp: 'Just now',
+                  read: false,
+                };
+                nativeStorageService.saveNotifications([newNotif, ...notifs]);
+              }
+            });
+            Alert.alert("You're the Recipient! 🎉", `Congratulations! You have been chosen to receive PKR ${((committee.contributionAmount || 0) * totalCycles).toLocaleString()} for this cycle.`);
+          } else {
+            setCelebrationMessage(`🎉 ${recipient.name} is the recipient for Cycle 1!`);
+          }
           
           celebrationOpacity.setValue(0);
           Animated.timing(celebrationOpacity, {
@@ -235,11 +278,11 @@ export const CommitteeRoomScreen: React.FC<CommitteeRoomScreenProps> = ({
             }).start(() => {
               setCelebrationMessage(null);
             });
-          }, 5000);
+          }, 6000);
         }
       });
     }
-  }, [isFull, recipient?.id, committee?.id, committee?.currentRecipientId]);
+  }, [isFull, recipient?.id, committee?.id, committee?.currentRecipientId, currentUser?.id]);
 
   let currentCycle = 1;
   if (committee) {

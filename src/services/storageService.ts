@@ -255,6 +255,11 @@ class NativeStorageService {
     return data ? JSON.parse(data) : SEED_NOTIFICATIONS;
   }
 
+  async saveNotifications(notifications: AppNotification[]) {
+    await AsyncStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(notifications));
+    this.notify();
+  }
+
   async getItem(key: string): Promise<string | null> {
     try {
       return await AsyncStorage.getItem(key);
