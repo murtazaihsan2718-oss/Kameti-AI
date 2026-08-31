@@ -42,17 +42,19 @@ class VoiceAssistantService {
     const userName = user?.name || 'there';
     const committees = this.getUserScopedCommittees();
     const activeCommittees = committees.filter(c => !c.status?.toLowerCase().includes('forming'));
-    const isRomanUrdu = /meri|mera|bari|paise|kitne|kab|kon|kis|bheje|jama|nahi|karega|karo|kaun|mujhe/.test(q);
-    const isUrduScript = /[\u0600-\u06FF]/.test(q);
+    const isUrduScript = /[\u0600-\u06FF]/.test(rawQuery || '');
+    const isRomanUrdu = /meri|mera|mere|bari|paise|kitne|kitna|kitnay|kab|kon|kaun|kis|bheje|jama|nahi|karega|karo|mujhe|hum|aap|batao|kist|paisa|chahiye|hogi|bataen|bataiye|karen/.test(q);
 
     // 1. Dues & Pending Contributions
     if (
       q.includes('owe') || q.includes('due') || q.includes('kitne paise') || q.includes('kitna dena') ||
-      q.includes('payment') || q.includes('pending') || q.includes('pay this month') || q.includes('kisht')
+      q.includes('payment') || q.includes('pending') || q.includes('pay this month') || q.includes('kisht') ||
+      q.includes('ادائیگی') || q.includes('دینے') || q.includes('کتنے')
     ) {
       if (activeCommittees.length === 0) {
-        if (isRomanUrdu) return { reply: 'Aap ki koi active committee nahi hai jis ki payment pending ho.', language: 'roman_ur' };
-        return { reply: 'You have no active committees with pending dues this month.', language: 'en' };
+        if (isUrduScript) return { reply: 'آپ کی تمام ادائیگیاں مکمل ہیں! اس مہینے کوئی ادائیگی واجب الادا نہیں ہے۔', language: 'ur' };
+        if (isRomanUrdu) return { reply: 'Aap ki tamam payments complete hain! Is mahine koi payment pending nahi hai.', language: 'roman_ur' };
+        return { reply: 'Great news! You have no pending payments due for this month. All your contributions are up to date.', language: 'en' };
       }
 
       let totalDue = 0;
@@ -64,6 +66,12 @@ class VoiceAssistantService {
         details.push(`• **${c.name}**: PKR ${amt.toLocaleString()} (Due on ${c.startDate || '10th'})`);
       });
 
+      if (isUrduScript) {
+        return {
+          reply: `آپ کے اس مہینے کل **PKR ${totalDue.toLocaleString()}** واجب الادا ہیں:\n\n${details.join('\n')}`,
+          language: 'ur'
+        };
+      }
       if (isRomanUrdu) {
         return {
           reply: `Aap ko is mahine kul **PKR ${totalDue.toLocaleString()}** ada karne hain:\n\n${details.join('\n')}`,
@@ -79,17 +87,26 @@ class VoiceAssistantService {
     // 2. Payout turn & Receiving
     if (
       q.includes('turn') || q.includes('payout') || q.includes('receive') || q.includes('meri bari') ||
-      q.includes('mujhe kab') || q.includes('mera number') || q.includes('getting paid') || q.includes('kitnay mil')
+      q.includes('mujhe kab') || q.includes('mera number') || q.includes('getting paid') || q.includes('kitnay mil') ||
+      q.includes('باری') || q.includes('رقم') || q.includes('ملے')
     ) {
       if (activeCommittees.length === 0) {
+        if (isUrduScript) return { reply: 'آپ ابھی کسی فعال کمیٹی میں شامل نہیں ہیں۔', language: 'ur' };
+        if (isRomanUrdu) return { reply: 'Aap abhi kisi active committee mein shamil nahi hain.', language: 'roman_ur' };
         return { reply: 'You are not enrolled in any active committees yet.', language: 'en' };
       }
 
       const summaries = activeCommittees.map(c => {
-        const totalPool = (c.contributionAmount || 20000) * (c.numberOfMembers || 5);
-        return `• **${c.name}**: Pool of **PKR ${totalPool.toLocaleString()}** (Turn will be assigned via Lucky Draw / Schedule)`;
+        const totalPool = (c.contributionAmount || 20000) * (c.numberOfMembers || c.totalCycles || 5);
+        return `• **${c.name}**: Pool of **PKR ${totalPool.toLocaleString()}** (Turn assigned via Lucky Draw / Schedule)`;
       });
 
+      if (isUrduScript) {
+        return {
+          reply: `آپ کی کمیٹی کی باری کی تفصیلات درج ذیل ہیں:\n\n${summaries.join('\n')}`,
+          language: 'ur'
+        };
+      }
       if (isRomanUrdu) {
         return {
           reply: `Aap ki committee payout details yeh hain:\n\n${summaries.join('\n')}`,
@@ -105,9 +122,10 @@ class VoiceAssistantService {
     // 3. Current Recipient this cycle
     if (
       q.includes('recipient') || q.includes('receiving') || q.includes('bari kis') ||
-      q.includes('kiski bari') || q.includes('kon le raha') || q.includes('who is')
+      q.includes('kiski bari') || q.includes('kon le raha') || q.includes('who is') || q.includes('وصول')
     ) {
       const recs = activeCommittees.map(c => `• **${c.name}**: Ahmed Khan (Cycle 1 recipient)`).join('\n');
+      if (isUrduScript) return { reply: `اس مہینے رقم وصول کرنے والوں کی فہرست:\n\n${recs}`, language: 'ur' };
       if (isRomanUrdu) return { reply: `Is mahine recipients ki details:\n\n${recs}`, language: 'roman_ur' };
       return { reply: `Here are the recipients for the current cycle:\n\n${recs}`, language: 'en' };
     }
@@ -115,36 +133,59 @@ class VoiceAssistantService {
     // 4. Which committees am I enrolled in
     if (
       q.includes('which committee') || q.includes('my committee') || q.includes('all committee') ||
-      q.includes('meri committee') || q.includes('kitni committee') || q.includes('committees am i') || q.includes('in')
+      q.includes('meri committee') || q.includes('kitni committee') || q.includes('committees am i') ||
+      q.includes('کمیٹی') || q.includes('کمیٹیاں')
     ) {
       if (committees.length === 0) {
+        if (isUrduScript) return { reply: 'آپ ابھی کسی کمیٹی میں شامل نہیں ہیں۔ ہوم اسکرین پر "+ بنائیں" پر ٹیپ کریں!', language: 'ur' };
+        if (isRomanUrdu) return { reply: 'Aap abhi kisi committee mein shamil nahi hain. Home screen par "+ Create" par tap karein!', language: 'roman_ur' };
         return { reply: 'You are not enrolled in any committees. Tap "+ Create New Committee" on Home to start!', language: 'en' };
       }
       const list = committees.map(c => {
-        const pool = (c.contributionAmount || 20000) * (c.numberOfMembers || 5);
+        const pool = (c.contributionAmount || 20000) * (c.numberOfMembers || c.totalCycles || 5);
         return `• **${c.name}** (Code: \`${c.joinCode}\`)\n  - Contribution: PKR ${(c.contributionAmount || 20000).toLocaleString()}/month | Pool: PKR ${pool.toLocaleString()}\n  - Status: ${c.status || 'Active'}`;
       }).join('\n\n');
 
+      if (isUrduScript) return { reply: `آپ کی رجسٹرڈ کمیٹیاں درج ذیل ہیں:\n\n${list}`, language: 'ur' };
+      if (isRomanUrdu) return { reply: `Aap ki enrolled committees yeh hain:\n\n${list}`, language: 'roman_ur' };
       return { reply: `You are currently enrolled in:\n\n${list}`, language: 'en' };
     }
 
     // 5. How does Kameti work
-    if (q.includes('how') && (q.includes('work') || q.includes('kameti') || q.includes('beesi') || q.includes('rosca') || q.includes('kya hai'))) {
+    if ((q.includes('how') && (q.includes('work') || q.includes('kameti') || q.includes('beesi') || q.includes('rosca') || q.includes('kya hai'))) || q.includes('کیسے') || q.includes('kaise')) {
+      if (isUrduScript) {
+        return {
+          reply: `**کمیٹی کا طریقہ کار:**\n\n1. **ماہانہ بچت**: تمام ممبران ہر مہینے مقررہ رقم ایک مشترکہ پول میں جمع کرتے ہیں۔\n2. **منصفانہ تقسیم**: ہر سائیکل میں قرعہ اندازی یا شیڈول کے مطابق ایک ممبر کو تمام رقم دی جاتی ہے۔\n3. **بغیر سود بچت**: بغیر کسی سود کے یکمشت بڑی رقم حاصل کرنے کا بہترین روایتی طریقہ!`,
+          language: 'ur'
+        };
+      }
+      if (isRomanUrdu) {
+        return {
+          reply: `**Kameti Ka Tareeqa:**\n\n1. **Monthly Pooling**: Sab members har mahine aik fix raqam jama karte hain.\n2. **Fair Turn**: Har cycle mein kisi aik member ko qura-andazi ya bari ke mutabiq sari raqam milti hai.\n3. **Bila Sood Bachat**: Baghair kisi sood ke bari raqam hasil karne ka aasan zariya!`,
+          language: 'roman_ur'
+        };
+      }
       return {
         reply: `**How Kameti Works:**\n\n1. **Monthly Pooling**: A group of trusted members deposits a fixed monthly amount into a shared pool.\n2. **Fair Turn Allocation**: Each cycle, one member collects the entire lump-sum pool (assigned fairly via Lucky Draw or schedule).\n3. **Zero Interest**: Provides debt-free, community-driven savings for everyone!`,
         language: 'en'
       };
     }
 
-    // Explicit Offline notice for arbitrary queries
+    // Default friendly assistant response
+    if (isUrduScript) {
+      return {
+        reply: `میں آپ کی واجب الادا رقوم، کمیٹی کی باری، ممبران کی تفصیلات اور تاریخوں کے بارے میں بتا سکتا ہوں۔ آپ کیا جاننا چاہتے ہیں؟`,
+        language: 'ur'
+      };
+    }
     if (isRomanUrdu) {
       return {
-        reply: `[Offline Mode] Main aap ki local committee records se connected hoon. Aap pooch sakte hain:\n• *"Mujhe kitne paise dene hain?"*\n• *"Meri committee ki bari kab hai?"*\n• *"Main kitni committees mein hoon?"*`,
+        reply: `Main aap ki pending payments, bari ka turn, aur committee ke members ke bare mein madad kar sakta hoon. Aap kya janna chahte hain?`,
         language: 'roman_ur'
       };
     }
     return {
-      reply: `[Offline Mode] I am currently in offline mode with your local committee records. You can ask me:\n• *"How much do I owe this month?"*\n• *"When is my next payout turn?"*\n• *"What committees am I in?"*\n• *"How does Kameti work?"*`,
+      reply: `I can help you check your pending payments, payout turn, committee member statuses, or next payout date. What would you like to know?`,
       language: 'en'
     };
   }

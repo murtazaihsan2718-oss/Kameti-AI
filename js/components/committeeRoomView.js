@@ -80,10 +80,11 @@ export function renderCommitteeRoomView(container, {
         storageService.setMembers(localMembers);
       }
 
-      // Auto pick winner if committee is full and no recipient set
-      const totalSlots = target.totalCycles || target.duration || target.memberCount || target.numberOfMembers || 5;
-      const isFull = target.members.length >= totalSlots;
-      if (isFull && !target.currentRecipientId && target.members.length > 0) {
+      // Auto pick winner ONLY if committee is 100% full and not forming
+      const totalSlots = Math.max(2, target.totalCycles || target.duration || target.memberCount || target.numberOfMembers || 5);
+      const isFormingStatus = target.status && (target.status.toLowerCase().includes('forming') || target.status.toLowerCase().includes('waiting'));
+      const isFull = !isFormingStatus && (target.members.length >= totalSlots);
+      if (isFull && !target.currentRecipientId && target.members.length >= totalSlots) {
         const rand = Math.floor(Math.random() * target.members.length);
         const chosen = target.members[rand];
         const chosenId = chosen.id || chosen.userId;
@@ -106,9 +107,10 @@ export function renderCommitteeRoomView(container, {
   function render() {
     const { committee, members, currentMonth, currentPayments } = details;
 
-    const totalCycles = committee.duration || committee.numberOfMembers || committee.totalCycles || 5;
+    const totalCycles = Math.max(2, committee.duration || committee.numberOfMembers || committee.totalCycles || committee.memberCount || 5);
     const memberCount = members.length;
-    const isFull = memberCount >= totalCycles;
+    const isForming = committee.status && (committee.status.toLowerCase().includes('forming') || committee.status.toLowerCase().includes('waiting'));
+    const isFull = !isForming && (memberCount >= totalCycles);
 
     let recipientUser = null;
     if (isFull) {

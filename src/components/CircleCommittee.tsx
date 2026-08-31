@@ -32,17 +32,9 @@ export const CircleCommittee: React.FC<CircleCommitteeProps> = ({
   const spinAnim = useRef(new Animated.Value(0)).current;
   const wheelAnim = useRef(new Animated.Value(0)).current;
 
-  useEffect(() => {
-    if (shouldAnimateSpin && !isSpinning) {
-      runSpinAnimation();
-    }
-  }, [shouldAnimateSpin]);
-
   let members: Member[] = [];
-  if (committee.members) {
-    if (committee.members.length > 0) {
-      members = committee.members;
-    }
+  if (committee.members && committee.members.length > 0) {
+    members = committee.members;
   }
 
   let totalSlots = 5;
@@ -55,11 +47,16 @@ export const CircleCommittee: React.FC<CircleCommitteeProps> = ({
   } else if (committee.duration) {
     totalSlots = committee.duration;
   }
+  totalSlots = Math.max(2, totalSlots);
 
-  let isFull = false;
-  if (members.length >= totalSlots) {
-    isFull = true;
-  }
+  const isExplicitlyForming = committee.status?.toLowerCase().includes('forming') || committee.status?.toLowerCase().includes('waiting');
+  const isFull = !isExplicitlyForming && (members.length >= totalSlots);
+
+  useEffect(() => {
+    if (isFull && shouldAnimateSpin && !isSpinning) {
+      runSpinAnimation();
+    }
+  }, [shouldAnimateSpin, isFull]);
 
   let currentRecipientId = '';
   if (isFull) {

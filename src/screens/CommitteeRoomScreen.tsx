@@ -174,28 +174,25 @@ export const CommitteeRoomScreen: React.FC<CommitteeRoomScreenProps> = ({
       totalCycles = committee.duration;
     }
   }
+  totalCycles = Math.max(2, totalCycles);
 
   let memberCount = 0;
-  if (committee) {
-    if (committee.members) {
-      memberCount = committee.members.length;
-    }
+  if (committee && committee.members) {
+    memberCount = committee.members.length;
   }
 
-  let isFull = false;
-  if (memberCount >= totalCycles) {
-    isFull = true;
-  }
+  const isExplicitlyForming = committee?.status && (committee.status.toLowerCase().includes('forming') || committee.status.toLowerCase().includes('waiting'));
+  const isFull = !isExplicitlyForming && (memberCount >= totalCycles);
 
-  // Auto select random recipient when committee becomes full
+  // Auto select random recipient ONLY when committee is 100% full and active
   useEffect(() => {
-    if (isFull && committee && !committee.currentRecipientId && committee.members && committee.members.length > 0) {
+    if (isFull && committee && !committee.currentRecipientId && committee.members && committee.members.length >= totalCycles) {
       const randomIndex = Math.floor(Math.random() * committee.members.length);
       const chosen = committee.members[randomIndex];
       const chosenId = chosen.id;
       FirebaseService.updateRecipientWinner(committee.id, chosenId, 1);
     }
-  }, [isFull, committee?.currentRecipientId, committee?.id]);
+  }, [isFull, committee?.currentRecipientId, committee?.id, totalCycles]);
 
   let recipient: Member | null = null;
   if (isFull) {
