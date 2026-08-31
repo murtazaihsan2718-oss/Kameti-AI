@@ -1,3 +1,6 @@
+import { storageService } from '../services/storageService.js';
+import { FirebaseService } from '../services/firebaseService.js';
+
 function isValidPakistaniPhone(raw) {
   const digits = (raw || '').replace(/[^0-9]/g, '');
   if (/^03\d{9}$/.test(digits)) return true;
@@ -248,7 +251,7 @@ export function renderOnboardingView(container, { onComplete, showToast }) {
     // Sign in form submission
     const signinForm = document.getElementById('signin-phone-form');
     if (signinForm) {
-      signinForm.addEventListener('submit', (e) => {
+      signinForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const phoneVal = document.getElementById('input-signin-phone')?.value.trim();
         if (!phoneVal) {
@@ -263,7 +266,7 @@ export function renderOnboardingView(container, { onComplete, showToast }) {
         const clean = normalizePakistaniPhone(phoneVal);
         const isDemo = clean === '03001234567';
 
-        let userToLogin;
+        let userToLogin = null;
         if (isDemo) {
           userToLogin = {
             id: 'usr_aown',
@@ -289,32 +292,30 @@ export function renderOnboardingView(container, { onComplete, showToast }) {
           if (found) {
             userToLogin = found;
           } else {
-            const formattedPhone = `${clean.slice(0, 4)} ${clean.slice(4)}`;
-            userToLogin = {
-              id: 'usr_' + clean,
-              name: `User ${clean.slice(-4) || '92'}`,
-              verifiedPhone: formattedPhone,
-              phone: formattedPhone,
-              paymentMethod: 'EasyPaisa',
-              paymentNumber: formattedPhone,
-              accountNumber: formattedPhone,
-              accountTitle: 'Account Holder',
-              isNewUser: false,
-              stats: {
-                activeCommittees: 0,
-                completedCommittees: 0,
-                totalContributions: 0,
-                totalPayouts: 0,
-              },
-              createdAt: new Date().toISOString()
-            };
-            storedUsers.push(userToLogin);
-            storageService.setUsers(storedUsers);
+            userToLogin = await FirebaseService.getUserProfileByPhone(clean);
           }
         }
 
-        storageService.setCurrentUser(userToLogin);
-        if (typeof onComplete === 'function') onComplete(userToLogin);
+        if (userToLogin) {
+          storageService.setCurrentUser(userToLogin);
+          const users = storageService.getUsers();
+          const idx = users.findIndex(u => u.id === userToLogin.id || normalizePakistaniPhone(u.verifiedPhone || u.phone) === clean);
+          if (idx >= 0) {
+            users[idx] = userToLogin;
+          } else {
+            users.push(userToLogin);
+          }
+          storageService.setUsers(users);
+          await FirebaseService.saveUserProfile(userToLogin);
+          if (typeof onComplete === 'function') onComplete(userToLogin);
+        } else {
+          const formattedPhone = clean.startsWith('03') ? `${clean.slice(0, 4)} ${clean.slice(4)}` : clean;
+          authMode = 'signup';
+          render();
+          const phoneInput = document.getElementById('input-onboard-phone');
+          if (phoneInput) phoneInput.value = formattedPhone;
+          if (showToast) showToast(`No profile found for ${formattedPhone}. Please enter your name to create one.`);
+        }
       });
     }
 
@@ -343,8 +344,16 @@ export function renderOnboardingView(container, { onComplete, showToast }) {
         const normPhone = normalizePakistaniPhone(phoneVal);
         const cleanPhone = `${normPhone.slice(0, 4)} ${normPhone.slice(4)}`;
         const isDemo = normPhone === '03001234567' || nameVal.toLowerCase().includes('aown');
+
+        // Check if profile exists locally or in Cloud
+        let existing = storageService.getUsers().find(u => normalizePakistaniPhone(u.verifiedPhone || u.phone) === normPhone);
+        if (!existing && !isDemo) {
+          existing = await FirebaseService.getUserProfileByPhone(normPhone);
+        }
+
+        const userId = isDemo ? 'usr_aown' : (existing?.id || ('u_' + normPhone));
         const newUser = {
-          id: isDemo ? 'usr_aown' : ('usr_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 4)),
+          id: userId,
           name: nameVal,
           verifiedPhone: cleanPhone,
           phone: cleanPhone,
@@ -353,7 +362,7 @@ export function renderOnboardingView(container, { onComplete, showToast }) {
           accountNumber: accVal || cleanPhone,
           accountTitle: nameVal,
           isNewUser: false,
-          stats: {
+          stats: existing?.stats || {
             activeCommittees: 0,
             completedCommittees: 0,
             totalContributions: 0,
@@ -371,6 +380,7 @@ export function renderOnboardingView(container, { onComplete, showToast }) {
           users.push(newUser);
         }
         storageService.setUsers(users);
+        await FirebaseService.saveUserProfile(newUser);
 
         if (typeof onComplete === 'function') {
           onComplete(newUser);

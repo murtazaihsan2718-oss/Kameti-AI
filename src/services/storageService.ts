@@ -3,9 +3,21 @@ import { Committee, UserProfile, AppNotification } from '../types/dataTypes';
 
 const STORAGE_KEYS = {
   USER: '@kameti_user',
+  USERS: '@kameti_users',
   COMMITTEES: '@kameti_committees',
   NOTIFICATIONS: '@kameti_notifications',
 };
+
+function normalizePhoneDigits(raw: string): string {
+  const digits = (raw || '').replace(/[^0-9]/g, '');
+  if (digits.startsWith('92') && digits.length === 12) {
+    return '0' + digits.slice(2);
+  }
+  if (digits.startsWith('3') && digits.length === 10) {
+    return '0' + digits;
+  }
+  return digits;
+}
 
 const SEED_USER: UserProfile = {
   id: 'u1',
@@ -122,8 +134,37 @@ class NativeStorageService {
     return data ? JSON.parse(data) : null;
   }
 
+  async getUsers(): Promise<UserProfile[]> {
+    const data = await AsyncStorage.getItem(STORAGE_KEYS.USERS);
+    return data ? JSON.parse(data) : [];
+  }
+
+  async saveUserToRegistry(user: UserProfile) {
+    if (!user) return;
+    const users = await this.getUsers();
+    const cleanPhone = normalizePhoneDigits(user.phone);
+    const idx = users.findIndex(u => 
+      u.id === user.id || 
+      (cleanPhone && normalizePhoneDigits(u.phone) === cleanPhone)
+    );
+    if (idx >= 0) {
+      users[idx] = { ...users[idx], ...user };
+    } else {
+      users.push(user);
+    }
+    await AsyncStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
+  }
+
+  async getUserByPhone(phone: string): Promise<UserProfile | null> {
+    const clean = normalizePhoneDigits(phone);
+    if (!clean) return null;
+    const users = await this.getUsers();
+    return users.find(u => normalizePhoneDigits(u.phone) === clean) || null;
+  }
+
   async login(user: UserProfile) {
     await AsyncStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(user));
+    await this.saveUserToRegistry(user);
     this.notify();
     return user;
   }
@@ -133,6 +174,7 @@ class NativeStorageService {
     if (!current) return null;
     const updated = { ...current, ...user };
     await AsyncStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(updated));
+    await this.saveUserToRegistry(updated as UserProfile);
     this.notify();
     return updated;
   }

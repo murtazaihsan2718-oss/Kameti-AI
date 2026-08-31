@@ -58,6 +58,8 @@ export interface Committee {
   duration?: number;
   currentRecipientId: string;
   status: CommitteeStatus;
+  creatorId?: string;
+  creatorPhone?: string;
   nextDueDate?: string;
   members: Member[];
   payments: PaymentProof[];

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TextInput, Alert, Modal, Animated }
 import { ArrowLeft, User, Phone, CreditCard, Save, LogOut, Check } from 'lucide-react-native';
 import { UserProfile, PaymentMethod } from '../types/dataTypes';
 import { nativeStorageService } from '../services/storageService';
+import { FirebaseService } from '../services/firebaseService';
 import { TactilePressable } from '../components/TactilePressable';
 
 interface ProfileScreenProps {
@@ -112,12 +113,15 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBack, onLogout }
     const norm = normalizePakistaniPhone(phone);
     const formattedPhone = norm.startsWith('03') ? `${norm.slice(0, 4)} ${norm.slice(4)}` : norm;
 
-    await nativeStorageService.updateUser({
+    const updated = await nativeStorageService.updateUser({
       name: name.trim(),
       phone: formattedPhone,
       paymentMethod,
       accountNumber: accountNumber.trim() || formattedPhone,
     });
+    if (updated) {
+      await FirebaseService.saveUserProfile(updated);
+    }
     Alert.alert('Profile Saved', 'Your payment account details were updated.');
   };
 

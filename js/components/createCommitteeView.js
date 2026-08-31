@@ -226,6 +226,28 @@ export function renderCreateCommitteeView(container, { onBack, onCreated, showTo
             recipientSelectionMethod: formData.selectionMethod
           });
 
+          const currentUser = storageService.getCurrentUser();
+          const creatorMember = {
+            id: currentUser ? currentUser.id : ('m_' + Date.now().toString(36)),
+            name: currentUser ? currentUser.name : 'Committee Creator',
+            phone: currentUser ? (currentUser.verifiedPhone || currentUser.phone || '+923000000000') : '+923000000000',
+            avatar: 'creator',
+            paymentMethod: currentUser ? (currentUser.paymentMethod || 'easypaisa') : 'easypaisa',
+            accountNumber: currentUser ? (currentUser.accountNumber || currentUser.paymentNumber || currentUser.phone || '03000000000') : '03000000000',
+            accountTitle: currentUser ? (currentUser.accountTitle || currentUser.name || 'Creator') : 'Creator',
+            hasReceivedPayout: false,
+          };
+
+          // Attach creator member to local committee object as well
+          const localCommittees = storageService.getCommittees();
+          const foundIdx = localCommittees.findIndex(c => c.id === createdCommittee.id);
+          if (foundIdx >= 0) {
+            localCommittees[foundIdx].creatorId = currentUser ? currentUser.id : undefined;
+            localCommittees[foundIdx].creatorPhone = currentUser ? (currentUser.verifiedPhone || currentUser.phone) : undefined;
+            localCommittees[foundIdx].members = [creatorMember];
+            storageService.setCommittees(localCommittees);
+          }
+
           await FirebaseService.saveCommittee({
             id: createdCommittee.id,
             name: createdCommittee.name,
@@ -239,18 +261,9 @@ export function renderCreateCommitteeView(container, { onBack, onCreated, showTo
             startDate: createdCommittee.startDate,
             selectionMode: createdCommittee.recipientSelectionMethod,
             status: createdCommittee.status,
-            members: [
-              {
-                id: 'm1',
-                name: 'Committee Creator',
-                phone: '+923000000000',
-                avatar: 'creator',
-                paymentMethod: 'easypaisa',
-                accountNumber: '03000000000',
-                accountTitle: 'Creator',
-                hasReceivedPayout: false,
-              }
-            ],
+            creatorId: currentUser ? currentUser.id : undefined,
+            creatorPhone: currentUser ? (currentUser.verifiedPhone || currentUser.phone) : undefined,
+            members: [creatorMember],
             payments: [],
           });
 

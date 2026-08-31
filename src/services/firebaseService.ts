@@ -10,7 +10,7 @@ import {
   deleteDoc,
   onSnapshot,
 } from 'firebase/firestore';
-import { Committee, Member, PaymentProof } from '../types/dataTypes';
+import { Committee, Member, PaymentProof, UserProfile } from '../types/dataTypes';
 
 // Live Firebase Project Configuration for kameti-ai (100% Free Spark Plan)
 const firebaseConfig = {
@@ -314,6 +314,46 @@ export class FirebaseService {
       console.log('[FirebaseService] Deleted committee from Cloud Firestore:', committeeId);
     } catch (err) {
       console.log('[FirebaseService] Error deleting committee from cloud:', err);
+    }
+  }
+
+  /**
+   * Persist User Profile to Cloud Firestore by User ID and Phone
+   */
+  static async saveUserProfile(user: UserProfile) {
+    try {
+      if (!user || !user.phone) return;
+      const cleanPhone = (user.phone || '').replace(/[^0-9]/g, '');
+      const userRef = doc(db, 'users', user.id);
+      await setDoc(userRef, user, { merge: true });
+
+      if (cleanPhone) {
+        const phoneRef = doc(db, 'users_by_phone', cleanPhone);
+        await setDoc(phoneRef, user, { merge: true });
+      }
+      console.log('[FirebaseService] Saved user profile to Cloud Firestore:', user.id, user.name);
+    } catch (err) {
+      console.log('[FirebaseService] Error saving user profile to cloud:', err);
+    }
+  }
+
+  /**
+   * Retrieve User Profile from Cloud Firestore by phone
+   */
+  static async getUserProfileByPhone(phone: string): Promise<UserProfile | null> {
+    try {
+      const cleanPhone = (phone || '').replace(/[^0-9]/g, '');
+      if (!cleanPhone) return null;
+
+      const phoneRef = doc(db, 'users_by_phone', cleanPhone);
+      const snap = await getDoc(phoneRef);
+      if (snap.exists()) {
+        return snap.data() as UserProfile;
+      }
+      return null;
+    } catch (err) {
+      console.log('[FirebaseService] Error getting user profile by phone:', err);
+      return null;
     }
   }
 }

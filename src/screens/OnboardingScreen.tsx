@@ -12,6 +12,7 @@ import {
 import { User, Phone, CreditCard, ArrowRight, Zap, Check } from 'lucide-react-native';
 import { UserProfile, PaymentMethod } from '../types/dataTypes';
 import { nativeStorageService } from '../services/storageService';
+import { FirebaseService } from '../services/firebaseService';
 import { TactilePressable } from '../components/TactilePressable';
 
 interface OnboardingScreenProps {
@@ -70,15 +71,23 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }
     const normPhone = normalizePakistaniPhone(phone);
     const cleanPhone = normPhone.startsWith('03') ? `${normPhone.slice(0, 4)} ${normPhone.slice(4)}` : normPhone;
     const isDemo = normPhone === '03001234567' || name.toLowerCase().includes('aown');
+
+    // Check if user already exists
+    let existing = await nativeStorageService.getUserByPhone(normPhone);
+    if (!existing && !isDemo) {
+      existing = await FirebaseService.getUserProfileByPhone(normPhone);
+    }
+
+    const userId = isDemo ? 'usr_aown' : (existing?.id || 'u_' + normPhone);
     const newUser: UserProfile = {
-      id: isDemo ? 'usr_aown' : 'u_' + Date.now().toString(36),
+      id: userId,
       name: name.trim(),
       phone: cleanPhone,
       paymentMethod,
       accountNumber: accountNumber.trim() || cleanPhone,
       accountTitle: name.trim(),
       isNewUser: false,
-      stats: {
+      stats: existing?.stats || {
         activeCommittees: 0,
         completedCommittees: 0,
         totalContributions: 0,
@@ -87,6 +96,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }
     };
 
     await nativeStorageService.login(newUser);
+    await FirebaseService.saveUserProfile(newUser);
     onComplete(newUser);
   };
 
@@ -103,7 +113,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }
     const clean = normalizePakistaniPhone(signInPhone);
     const isDemo = clean === '03001234567';
 
-    let userToLogin: UserProfile;
+    let userToLogin: UserProfile | null = null;
     if (isDemo) {
       userToLogin = {
         id: 'usr_aown',
@@ -121,32 +131,28 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }
         },
       };
     } else {
-      const storedUser = await nativeStorageService.getUser();
-      const storedClean = storedUser ? normalizePakistaniPhone(storedUser.phone) : '';
-      if (storedUser && storedClean === clean) {
-        userToLogin = storedUser;
-      } else {
-        const formattedPhone = `${clean.slice(0, 4)} ${clean.slice(4)}`;
-        userToLogin = {
-          id: 'u_' + clean,
-          name: storedUser?.name || `User ${clean.slice(-4) || '92'}`,
-          phone: formattedPhone,
-          paymentMethod: 'easypaisa',
-          accountNumber: formattedPhone,
-          accountTitle: storedUser?.name || 'Account Holder',
-          isNewUser: false,
-          stats: {
-            activeCommittees: 0,
-            completedCommittees: 0,
-            totalContributions: 0,
-            totalPayouts: 0,
-          },
-        };
+      // 1. Check local device registry
+      userToLogin = await nativeStorageService.getUserByPhone(clean);
+
+      // 2. Check Cloud Firestore
+      if (!userToLogin) {
+        userToLogin = await FirebaseService.getUserProfileByPhone(clean);
       }
     }
 
-    await nativeStorageService.login(userToLogin);
-    onComplete(userToLogin);
+    if (userToLogin) {
+      await nativeStorageService.login(userToLogin);
+      await FirebaseService.saveUserProfile(userToLogin);
+      onComplete(userToLogin);
+    } else {
+      const formattedPhone = clean.startsWith('03') ? `${clean.slice(0, 4)} ${clean.slice(4)}` : clean;
+      setPhone(formattedPhone);
+      setAuthMode('signup');
+      Alert.alert(
+        'Account Not Found',
+        `No profile found for ${formattedPhone}. Please enter your name to create your profile.`
+      );
+    }
   };
 
   const handleQuickDemoFill = () => {

@@ -11,6 +11,17 @@ interface HomeScreenProps {
   onOpenVoice: () => void;
 }
 
+function normalizeDigits(raw: string): string {
+  const digits = (raw || '').replace(/[^0-9]/g, '');
+  if (digits.startsWith('92') && digits.length === 12) {
+    return '0' + digits.slice(2);
+  }
+  if (digits.startsWith('3') && digits.length === 10) {
+    return '0' + digits;
+  }
+  return digits;
+}
+
 export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate, onOpenVoice }) => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [committees, setCommittees] = useState<Committee[]>([]);
@@ -18,30 +29,35 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate, onOpenVoice 
   function filterUserCommittees(allCommittees: Committee[], currentUser: UserProfile | null): Committee[] {
     if (!currentUser) return [];
 
-    const userPhone = (currentUser.phone || '').replace(/[^0-9]/g, '');
-    const userName = (currentUser.name || '').trim().toLowerCase().replace('(you)', '').trim();
-    const isDemoUser = currentUser.id === 'usr_aown' || userName.includes('aown');
+    const userPhone = normalizeDigits(currentUser.phone || '');
+    const isDemoUser = currentUser.id === 'usr_aown' || (currentUser.name || '').toLowerCase().includes('aown');
 
     return allCommittees.filter(c => {
-      // 1. Creator match
-      if ((c as any).creatorId === currentUser.id) return true;
+      // 1. Seed demo committees only belong to demo profile
+      const isSeedDemoCommittee = (
+        c.id === 'c_family' || c.id === 'c_office' || c.id === 'c_travel' || 
+        c.id === 'c1' || c.id === 'c2' || c.id === 'com_friends_2026' || c.id === 'com_office_2026'
+      );
+      if (isSeedDemoCommittee) {
+        return isDemoUser;
+      }
 
-      // 2. Member list match
+      // 2. Match by creator ID
+      if ((c as any).creatorId && (c as any).creatorId === currentUser.id) return true;
+
+      // 3. Match by creator phone
+      const creatorPhone = normalizeDigits((c as any).creatorPhone || '');
+      if (userPhone && creatorPhone && userPhone === creatorPhone) return true;
+
+      // 4. Match by member list (matching either user ID or member phone)
       if (c.members && Array.isArray(c.members)) {
         const isMember = c.members.some(m => {
-          const mPhone = (m.phone || '').replace(/[^0-9]/g, '');
-          const mName = (m.name || '').trim().toLowerCase().replace('(you)', '').trim();
-          if (m.id === currentUser.id || (m as any).userId === currentUser.id) return true;
+          const mPhone = normalizeDigits(m.phone || (m as any).verifiedPhone || '');
+          if (m.id && (m.id === currentUser.id || (m as any).userId === currentUser.id)) return true;
           if (userPhone && mPhone && userPhone === mPhone) return true;
-          if (userName && mName && userName === mName) return true;
           return false;
         });
         if (isMember) return true;
-      }
-
-      // 3. Demo profile specifically gets seeded sample committees
-      if (isDemoUser) {
-        return c.id === 'c_family' || c.id === 'c_office' || c.id === 'com_friends_2026' || c.id === 'com_office_2026';
       }
 
       return false;
@@ -79,13 +95,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate, onOpenVoice 
             hasChanges = true;
           } else {
             // Only add cloud committee if current user is creator or in members!
-            const userPhone = (currentUser.phone || '').replace(/[^0-9]/g, '');
-            const userName = (currentUser.name || '').trim().toLowerCase().replace('(you)', '').trim();
-            const isCreator = (cc as any).creatorId === currentUser.id;
+            const userPhone = normalizeDigits(currentUser.phone || '');
+            const creatorPhone = normalizeDigits((cc as any).creatorPhone || '');
+            const isCreator = ((cc as any).creatorId && (cc as any).creatorId === currentUser.id) ||
+                              (userPhone && creatorPhone && userPhone === creatorPhone);
             const isMember = membersList.some(m => {
-              const mPhone = (m.phone || '').replace(/[^0-9]/g, '');
-              const mName = (m.name || '').trim().toLowerCase().replace('(you)', '').trim();
-              return m.id === currentUser.id || (m as any).userId === currentUser.id || (userPhone && mPhone && userPhone === mPhone) || (userName && mName && userName === mName);
+              const mPhone = normalizeDigits(m.phone || (m as any).verifiedPhone || '');
+              return (m.id && (m.id === currentUser.id || (m as any).userId === currentUser.id)) ||
+                     (userPhone && mPhone && userPhone === mPhone);
             });
 
             if (isCreator || isMember) {
@@ -104,6 +121,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate, onOpenVoice 
                 currentCycle: cc.currentCycle || 1,
                 status: cc.status || 'active',
                 selectionMode: cc.selectionMode || 'random',
+                creatorId: (cc as any).creatorId,
+                creatorPhone: (cc as any).creatorPhone,
                 members: membersList,
                 payments: [],
               });
@@ -194,7 +213,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate, onOpenVoice 
       await nativeStorageService.saveCommittees(committeeData);
     }
 
-    setCommittees(committeeData);
+    setCommittees(filterUserCommittees(committeeData, userData));
   };
 
   return (

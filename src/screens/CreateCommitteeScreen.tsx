@@ -90,6 +90,8 @@ export const CreateCommitteeScreen: React.FC<CreateCommitteeScreenProps> = ({ on
       duration: memberCount,
       currentRecipientId: '',
       status: 'active',
+      creatorId: user.id,
+      creatorPhone: user.phone,
       nextDueDate: '2026-09-01',
       members: [
         {

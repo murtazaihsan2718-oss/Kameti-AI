@@ -7,32 +7,49 @@ import { formatCurrency } from '../models/dataModels.js';
 export function renderHomeView(container, { onNavigate, onOpenCommittee, showToast }) {
   const currentUser = storageService.getCurrentUser();
 
+  function normalizeDigits(raw) {
+    const digits = (raw || '').replace(/[^0-9]/g, '');
+    if (digits.startsWith('92') && digits.length === 12) {
+      return '0' + digits.slice(2);
+    }
+    if (digits.startsWith('3') && digits.length === 10) {
+      return '0' + digits;
+    }
+    return digits;
+  }
+
   function getUserCommittees() {
     const allCommittees = storageService.getCommittees();
-    if (!currentUser) return allCommittees;
+    if (!currentUser) return [];
 
-    const userPhone = (currentUser.verifiedPhone || currentUser.phone || '').replace(/[^0-9]/g, '');
-    const userName = (currentUser.name || '').trim().toLowerCase().replace('(you)', '').trim();
-    const isDemoUser = currentUser.id === 'usr_aown' || userName.includes('aown');
+    const userPhone = normalizeDigits(currentUser.verifiedPhone || currentUser.phone || '');
+    const isDemoUser = currentUser.id === 'usr_aown' || (currentUser.name || '').toLowerCase().includes('aown');
 
     return allCommittees.filter(c => {
-      // Creator match
-      if (c.creatorId === currentUser.id) return true;
-      // Member list match
+      // 1. Seed demo committees only belong to demo profile
+      const isSeedDemoCommittee = (
+        c.id === 'com_friends_2026' || c.id === 'com_office_2026' || 
+        c.id === 'c1' || c.id === 'c2' || c.id === 'c_family' || c.id === 'c_office'
+      );
+      if (isSeedDemoCommittee) {
+        return isDemoUser;
+      }
+
+      // 2. Creator match
+      if (c.creatorId && c.creatorId === currentUser.id) return true;
+      const creatorPhone = normalizeDigits(c.creatorPhone || '');
+      if (userPhone && creatorPhone && userPhone === creatorPhone) return true;
+
+      // 3. Member list match
       if (c.members && Array.isArray(c.members)) {
         return c.members.some(m => {
-          const mPhone = (m.phone || '').replace(/[^0-9]/g, '');
-          const mName = (m.name || '').trim().toLowerCase().replace('(you)', '').trim();
-          if (m.id === currentUser.id || m.userId === currentUser.id) return true;
+          const mPhone = normalizeDigits(m.phone || m.verifiedPhone || '');
+          if (m.id && (m.id === currentUser.id || m.userId === currentUser.id)) return true;
           if (userPhone && mPhone && userPhone === mPhone) return true;
-          if (userName && mName && userName === mName) return true;
           return false;
         });
       }
-      // Demo Profile only receives the sample seeded committees
-      if (isDemoUser) {
-        return c.id === 'com_friends_2026' || c.id === 'com_office_2026';
-      }
+
       return false;
     });
   }
@@ -46,14 +63,21 @@ export function renderHomeView(container, { onNavigate, onOpenCommittee, showToa
       const localList = storageService.getCommittees();
       let hasChanges = false;
 
+      const userPhone = normalizeDigits(currentUser.verifiedPhone || currentUser.phone || '');
+
       cloudList.forEach(cc => {
         const existingIdx = localList.findIndex(lc => lc.id === cc.id || (lc.joinCode && cc.joinCode && lc.joinCode.toUpperCase() === cc.joinCode.toUpperCase()));
+        const creatorPhone = normalizeDigits(cc.creatorPhone || '');
+        const isCreator = (cc.creatorId && cc.creatorId === currentUser.id) || (userPhone && creatorPhone && userPhone === creatorPhone);
+        const isMember = cc.members && Array.isArray(cc.members) && cc.members.some(m => {
+          const mPhone = normalizeDigits(m.phone || m.verifiedPhone || '');
+          return (m.id && (m.id === currentUser.id || m.userId === currentUser.id)) || (userPhone && mPhone && userPhone === mPhone);
+        });
+
         if (existingIdx >= 0) {
-          // Update real-time state for existing committee
           localList[existingIdx] = { ...localList[existingIdx], ...cc };
           hasChanges = true;
-        } else if (cc.creatorId === currentUser.id) {
-          // Add if user created it in this session
+        } else if (isCreator || isMember) {
           localList.unshift(cc);
           hasChanges = true;
         }
