@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, Pressable, Platform, StatusBar as RNStatusBar, Animated, Easing, Keyboard } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Platform, StatusBar as RNStatusBar, Animated, Easing, Keyboard, AppState } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import * as Linking from 'expo-linking';
@@ -36,6 +36,18 @@ export default function App() {
 
   const currentScreenKey = `${currentTab}_${activeScreen}_${selectedCommitteeId}`;
 
+  const configureSystemBars = () => {
+    if (Platform.OS === 'android') {
+      RNStatusBar.setTranslucent(true);
+      RNStatusBar.setBackgroundColor('transparent');
+      RNStatusBar.setBarStyle('dark-content');
+      NavigationBar.setPositionAsync('absolute').catch(() => {});
+      NavigationBar.setBackgroundColorAsync('#00000000').catch(() => {});
+      NavigationBar.setVisibilityAsync('hidden').catch(() => {});
+      NavigationBar.setBehaviorAsync('overlay-swipe').catch(() => {});
+    }
+  };
+
   useEffect(() => {
     screenFadeAnim.setValue(0.7);
     screenTranslateY.setValue(8);
@@ -55,19 +67,20 @@ export default function App() {
   }, [currentScreenKey]);
 
   useEffect(() => {
-    if (Platform.OS === 'android') {
-      RNStatusBar.setTranslucent(true);
-      RNStatusBar.setBackgroundColor('transparent');
-      RNStatusBar.setBarStyle('dark-content');
-      NavigationBar.setBackgroundColorAsync('#FFFFFF').catch(() => {});
-      NavigationBar.setButtonStyleAsync('dark').catch(() => {});
-    }
+    configureSystemBars();
+
+    const appStateSub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        configureSystemBars();
+      }
+    });
 
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
     const showSub = Keyboard.addListener(showEvent, () => setIsKeyboardOpen(true));
     const hideSub = Keyboard.addListener(hideEvent, () => {
       setIsKeyboardOpen(false);
+      configureSystemBars();
     });
 
     nativeStorageService.init().then(async () => {
@@ -94,6 +107,7 @@ export default function App() {
     });
 
     return () => {
+      appStateSub.remove();
       showSub.remove();
       hideSub.remove();
       subscription.remove();
