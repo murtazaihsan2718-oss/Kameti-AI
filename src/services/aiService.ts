@@ -140,12 +140,13 @@ class AIService {
 
         if (response.ok) {
           const data = await response.json();
-          if (data && data.success && data.response) {
-            console.log(`[AIService] Successfully parsed Assistant response (${data.response.length} chars).`);
+          const replyText = data?.response || data?.reply;
+          if (data && data.success && replyText) {
+            console.log(`[AIService] Successfully parsed Assistant response (${replyText.length} chars).`);
             this.activeEndpoint = endpoint; // Cache confirmed working endpoint
             return {
               success: true,
-              response: data.response,
+              response: replyText,
             };
           }
           if (data && data.error) {

@@ -13,6 +13,7 @@ export function renderHomeView(container, { onNavigate, onOpenCommittee, showToa
 
     const userPhone = (currentUser.verifiedPhone || currentUser.phone || '').replace(/[^0-9]/g, '');
     const userName = (currentUser.name || '').trim().toLowerCase().replace('(you)', '').trim();
+    const isDemoUser = currentUser.id === 'usr_aown' || userName.includes('aown');
 
     return allCommittees.filter(c => {
       // Creator match
@@ -28,8 +29,11 @@ export function renderHomeView(container, { onNavigate, onOpenCommittee, showToa
           return false;
         });
       }
-      // Default sample committees
-      return c.id === 'com_friends_2026' || c.id === 'com_office_2026';
+      // Demo Profile only receives the sample seeded committees
+      if (isDemoUser) {
+        return c.id === 'com_friends_2026' || c.id === 'com_office_2026';
+      }
+      return false;
     });
   }
 
@@ -66,11 +70,9 @@ export function renderHomeView(container, { onNavigate, onOpenCommittee, showToa
   function render() {
     container.innerHTML = `
       <div style="padding: 12px 20px 24px 20px;">
-        <!-- Top Navbar -->
+        <!-- Top Navbar (Clean Centered Title with Profile on Right) -->
         <div class="app-top-header">
-          <button id="btn-menu" class="btn-icon-header">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
-          </button>
+          <div style="width: 38px;"></div>
           <span class="header-title">Kameti AI</span>
           <button id="btn-profile-top" class="btn-icon-header">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="7" r="4"></circle><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path></svg>
@@ -97,9 +99,19 @@ export function renderHomeView(container, { onNavigate, onOpenCommittee, showToa
           </button>
         </div>
 
-        <!-- Committee Cards List -->
+        <!-- Committee Cards List or Empty State -->
         <div style="display: flex; flex-direction: column; gap: 14px;">
-          ${committees.map((comm) => {
+          ${committees.length === 0 ? `
+            <div style="background-color: #F4F4F5; border-radius: 20px; padding: 32px 20px; text-align: center; margin-top: 4px;">
+              <div style="width: 46px; height: 46px; border-radius: 50%; background: #E4E4E7; display: flex; align-items: center; justify-content: center; margin: 0 auto 12px auto;">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#71717A" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>
+              </div>
+              <div style="font-size: 15px; font-weight: 800; color: #000000; margin-bottom: 6px;">No Committees Yet</div>
+              <div style="font-size: 13px; color: #71717A; font-weight: 500; line-height: 1.45; max-width: 280px; margin: 0 auto;">
+                Tap <strong>"Create New Committee"</strong> above to start your first savings circle, or join with an invite code.
+              </div>
+            </div>
+          ` : committees.map((comm) => {
             const currentCycle = comm.currentCycle || 1;
             const totalCycles = comm.duration || comm.numberOfMembers || 5;
             

@@ -28,7 +28,11 @@ class VoiceAssistantService {
           return (m.id === user.id || m.userId === user.id) || (userPhone && mPhone && userPhone === mPhone) || (userName && mName && userName === mName);
         });
       }
-      return c.id === 'com_friends_2026' || c.id === 'com_office_2026';
+      const isDemoUser = user.id === 'usr_aown' || userName.includes('aown');
+      if (isDemoUser) {
+        return c.id === 'com_friends_2026' || c.id === 'com_office_2026';
+      }
+      return false;
     });
   }
 

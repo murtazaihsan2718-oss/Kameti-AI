@@ -127,8 +127,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate, onOpenVoice 
   const loadData = async () => {
     const userData = await nativeStorageService.getUser();
     let committeeData = await nativeStorageService.getCommittees();
-    
-    if (committeeData.length === 0) {
+    setUser(userData);
+
+    const isDemoUser = userData?.id === 'usr_aown' || (userData?.name || '').toLowerCase().includes('aown');
+
+    if (committeeData.length === 0 && isDemoUser) {
       committeeData = [
         {
           id: 'c_family',
@@ -188,7 +191,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate, onOpenVoice 
       await nativeStorageService.saveCommittees(committeeData);
     }
 
-    setUser(userData);
     setCommittees(committeeData);
   };
 
@@ -196,11 +198,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate, onOpenVoice 
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         
-        {/* Top Header Bar */}
+        {/* Header - Clean Centered Title with Profile Icon on Right */}
         <View style={styles.header}>
-          <TactilePressable style={styles.headerBtn} haptic="light" scaleTo={0.9}>
-            <Menu size={22} color="#000000" strokeWidth={2.2} />
-          </TactilePressable>
+          <View style={styles.headerBtn} />
           <Text style={styles.headerTitle}>Kameti AI</Text>
           <TactilePressable
             style={styles.headerBtn}
@@ -234,30 +234,32 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate, onOpenVoice 
           <Text style={styles.sectionTitle}>Active Committees</Text>
         </View>
 
-        {/* Committee Cards List */}
-        {committees.map((committee) => {
-          let currentCycle = 1;
-          if (committee.currentCycle) {
-            currentCycle = committee.currentCycle;
-          }
+        {/* Committee Cards List or Empty State */}
+        {committees.length === 0 ? (
+          <View style={{ backgroundColor: '#F4F4F5', borderRadius: 20, padding: 32, alignItems: 'center', marginTop: 4 }}>
+            <View style={{ width: 46, height: 46, borderRadius: 23, backgroundColor: '#E4E4E7', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+              <Users size={22} color="#71717A" strokeWidth={2} />
+            </View>
+            <Text style={{ fontSize: 15, fontWeight: '800', color: '#000000', marginBottom: 6 }}>No Committees Yet</Text>
+            <Text style={{ fontSize: 13, color: '#71717A', fontWeight: '500', lineHeight: 18, textAlign: 'center', maxWidth: 280 }}>
+              Tap <Text style={{ fontWeight: '700', color: '#000' }}>"Create New Committee"</Text> above to start your first savings circle, or join with an invite code.
+            </Text>
+          </View>
+        ) : (
+          committees.map((committee) => {
+            let currentCycle = committee.currentCycle || 1;
+            let totalCycles = committee.totalCycles || committee.memberCount || 5;
 
-          let totalCycles = 5;
-          if (committee.totalCycles) {
-            totalCycles = committee.totalCycles;
-          } else if (committee.memberCount) {
-            totalCycles = committee.memberCount;
-          }
-
-          return (
-            <TactilePressable
-              key={committee.id}
-              style={styles.committeeCard}
-              haptic="selection"
-              scaleTo={0.97}
-              onPress={() => {
-                onNavigate('room', { committeeId: committee.id });
-              }}
-            >
+            return (
+              <TactilePressable
+                key={committee.id}
+                style={styles.committeeCard}
+                haptic="selection"
+                scaleTo={0.97}
+                onPress={() => {
+                  onNavigate('room', { committeeId: committee.id });
+                }}
+              >
               {/* Top Row: Group Icon + Title + Cycle Badge */}
               <View style={styles.cardTopRow}>
                 <View style={styles.titleWithIcon}>
@@ -285,7 +287,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate, onOpenVoice 
               </View>
             </TactilePressable>
           );
-        })}
+        }))}
       </ScrollView>
     </View>
   );
