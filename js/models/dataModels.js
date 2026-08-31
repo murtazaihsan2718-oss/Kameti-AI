@@ -5,7 +5,8 @@ export const PaymentMethods = {
   JAZZCASH: 'JazzCash',
   SADAPAY: 'SadaPay',
   NAYAPAY: 'NayaPay',
-  RAAST: 'Raast / Bank Transfer',
+  BANK: 'Bank Account',
+  RAAST: 'Bank Account',
   CASH: 'Cash in Hand'
 };
 

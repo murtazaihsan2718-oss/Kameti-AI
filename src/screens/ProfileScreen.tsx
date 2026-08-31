@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, Alert, Modal, Animated } from 'react-native';
-import { ArrowLeft, User, Phone, CreditCard, Save, LogOut } from 'lucide-react-native';
+import { ArrowLeft, User, Phone, CreditCard, Save, LogOut, Check } from 'lucide-react-native';
 import { UserProfile, PaymentMethod } from '../types/dataTypes';
 import { nativeStorageService } from '../services/storageService';
 import { TactilePressable } from '../components/TactilePressable';
@@ -9,6 +9,33 @@ interface ProfileScreenProps {
   onBack?: () => void;
   onLogout?: () => void;
 }
+
+function isValidPakistaniPhone(raw: string): boolean {
+  const digits = (raw || '').replace(/[^0-9]/g, '');
+  if (/^03\d{9}$/.test(digits)) return true;
+  if (/^923\d{9}$/.test(digits)) return true;
+  if (/^3\d{9}$/.test(digits)) return true;
+  return false;
+}
+
+function normalizePakistaniPhone(raw: string): string {
+  const digits = (raw || '').replace(/[^0-9]/g, '');
+  if (digits.startsWith('92') && digits.length === 12) {
+    return '0' + digits.slice(2);
+  }
+  if (digits.startsWith('3') && digits.length === 10) {
+    return '0' + digits;
+  }
+  return digits;
+}
+
+const PAYMENT_OPTIONS: { label: string; value: PaymentMethod }[] = [
+  { label: 'EasyPaisa', value: 'easypaisa' },
+  { label: 'JazzCash', value: 'jazzcash' },
+  { label: 'SadaPay', value: 'sadapay' },
+  { label: 'NayaPay', value: 'nayapay' },
+  { label: 'Bank Account', value: 'bank' },
+];
 
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBack, onLogout }) => {
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -53,6 +80,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBack, onLogout }
         setName(data.name);
       }
       if (data.phone) {
+        setName(data.name);
         setPhone(data.phone);
       }
       if (data.paymentMethod) {
@@ -68,11 +96,27 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBack, onLogout }
     if (!user) {
       return;
     }
+    if (!name.trim()) {
+      Alert.alert('Required', 'Please enter your name.');
+      return;
+    }
+    if (!phone.trim()) {
+      Alert.alert('Required', 'Please enter your phone number.');
+      return;
+    }
+    if (!isValidPakistaniPhone(phone)) {
+      Alert.alert('Invalid Phone Number', 'Please enter a valid 11-digit Pakistani mobile number (e.g. 0300 1234567).');
+      return;
+    }
+
+    const norm = normalizePakistaniPhone(phone);
+    const formattedPhone = norm.startsWith('03') ? `${norm.slice(0, 4)} ${norm.slice(4)}` : norm;
+
     await nativeStorageService.updateUser({
-      name,
-      phone,
+      name: name.trim(),
+      phone: formattedPhone,
       paymentMethod,
-      accountNumber,
+      accountNumber: accountNumber.trim() || formattedPhone,
     });
     Alert.alert('Profile Saved', 'Your payment account details were updated.');
   };
@@ -181,6 +225,37 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBack, onLogout }
                 placeholder="Phone"
                 keyboardType="phone-pad"
               />
+            </View>
+          </View>
+
+          {/* Preferred Payment Method */}
+          <View style={styles.formGroup}>
+            <Text style={styles.formLabel}>PREFERRED PAYMENT METHOD</Text>
+            <View style={styles.paymentGrid}>
+              {PAYMENT_OPTIONS.map((opt) => {
+                const isSelected = paymentMethod === opt.value;
+                return (
+                  <TactilePressable
+                    key={opt.value}
+                    style={[styles.paymentPill, isSelected && styles.paymentPillActive]}
+                    scaleTo={0.96}
+                    haptic="selection"
+                    onPress={() => setPaymentMethod(opt.value)}
+                  >
+                    <Text
+                      style={[
+                        styles.paymentPillText,
+                        isSelected && styles.paymentPillTextActive,
+                      ]}
+                    >
+                      {opt.label}
+                    </Text>
+                    {isSelected && (
+                      <Check size={13} color="#FFFFFF" strokeWidth={3} style={{ marginLeft: 4 }} />
+                    )}
+                  </TactilePressable>
+                );
+              })}
             </View>
           </View>
 
@@ -344,6 +419,34 @@ const styles = StyleSheet.create({
     color: '#71717A',
     letterSpacing: 0.7,
     marginBottom: 6,
+  },
+  paymentGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  paymentPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 9,
+    paddingHorizontal: 13,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#E4E4E7',
+    backgroundColor: '#FFFFFF',
+  },
+  paymentPillActive: {
+    borderColor: '#000000',
+    backgroundColor: '#000000',
+  },
+  paymentPillText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#71717A',
+  },
+  paymentPillTextActive: {
+    color: '#FFFFFF',
   },
   inputWithIcon: {
     flexDirection: 'row',

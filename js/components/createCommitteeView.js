@@ -204,12 +204,23 @@ export function renderCreateCommitteeView(container, { onBack, onCreated, showTo
         e.preventDefault();
         const inputName = document.getElementById('input-comm-name');
         const inputContrib = document.getElementById('input-comm-contribution');
+        const nameVal = inputName ? inputName.value.trim() : formData.name;
+        const contribVal = inputContrib ? parseInt(inputContrib.value, 10) : formData.contribution;
+
+        if (!nameVal) {
+          showToast('Please enter a committee name');
+          return;
+        }
+        if (!contribVal || contribVal <= 0) {
+          showToast('Please enter a monthly contribution amount greater than Rs. 0');
+          return;
+        }
 
         try {
           createdCommittee = committeeService.createCommittee({
-            name: inputName ? inputName.value.trim() : formData.name,
+            name: nameVal,
             numberOfMembers: formData.members,
-            contributionAmount: inputContrib ? parseInt(inputContrib.value, 10) : formData.contribution,
+            contributionAmount: contribVal,
             duration: formData.members,
             startDate: formData.startDate,
             recipientSelectionMethod: formData.selectionMethod

@@ -62,6 +62,10 @@ export const CreateCommitteeScreen: React.FC<CreateCommitteeScreenProps> = ({ on
       Alert.alert('Required', 'Please enter a committee name.');
       return;
     }
+    if (contribNum <= 0) {
+      Alert.alert('Invalid Contribution', 'Please enter a monthly contribution amount greater than PKR 0.');
+      return;
+    }
 
     const joinCode = 'KMT' + Math.floor(1000 + Math.random() * 9000);
     const newId = 'c_' + Date.now();

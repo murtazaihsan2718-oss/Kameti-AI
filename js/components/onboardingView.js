@@ -1,11 +1,25 @@
-// Onboarding View Component - Clean Design & Quick Fill Demo Option
+function isValidPakistaniPhone(raw) {
+  const digits = (raw || '').replace(/[^0-9]/g, '');
+  if (/^03\d{9}$/.test(digits)) return true;
+  if (/^923\d{9}$/.test(digits)) return true;
+  if (/^3\d{9}$/.test(digits)) return true;
+  return false;
+}
 
-import { storageService } from '../services/storageService.js';
-import { PaymentMethods } from '../models/dataModels.js';
+function normalizePakistaniPhone(raw) {
+  const digits = (raw || '').replace(/[^0-9]/g, '');
+  if (digits.startsWith('92') && digits.length === 12) {
+    return '0' + digits.slice(2);
+  }
+  if (digits.startsWith('3') && digits.length === 10) {
+    return '0' + digits;
+  }
+  return digits;
+}
 
 export function renderOnboardingView(container, { onComplete, showToast }) {
   let authMode = 'signup'; // 'signup' or 'signin'
-  let selectedPayout = PaymentMethods.EASYPAISA;
+  let selectedPayout = 'easypaisa';
 
   function render() {
     container.innerHTML = `
@@ -54,7 +68,7 @@ export function renderOnboardingView(container, { onComplete, showToast }) {
                     <span style="position: absolute; left: 14px; display: flex; align-items: center; justify-content: center;">
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#71717A" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
                     </span>
-                    <input type="tel" id="input-signin-phone" class="form-input-pill" style="padding-left: 42px; width: 100%; height: 46px; border-radius: 14px; border: 1.5px solid #E4E4E7; background: #FFFFFF; font-size: 14px; padding-right: 14px;" placeholder="0300 1234567" required autofocus />
+                    <input type="tel" id="input-signin-phone" class="form-input-pill" style="padding-left: 42px; width: 100%; height: 46px; border-radius: 14px; border: 1.5px solid #E4E4E7; background: #FFFFFF; font-size: 14px; padding-right: 14px;" placeholder="0300 1234567" maxlength="13" required autofocus />
                   </div>
                 </div>
 
@@ -62,12 +76,6 @@ export function renderOnboardingView(container, { onComplete, showToast }) {
                 <button type="submit" class="btn-pill-black" style="width: 100%; height: 48px; border-radius: 14px; background: #000000; color: #FFFFFF; font-weight: 700; font-size: 15px; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
                   <span>Sign In</span>
                   <span style="font-size: 16px;">→</span>
-                </button>
-
-                <!-- Quick Demo Sign In Button -->
-                <button type="button" id="btn-quick-demo-signin" style="width: 100%; height: 42px; border-radius: 14px; background: #FFFFFF; color: #71717A; font-weight: 700; font-size: 13px; border: 1.5px solid #E4E4E7; margin-top: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#71717A" stroke-width="2.2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
-                  <span>⚡ Sign In as Demo (Aown Raza)</span>
                 </button>
 
                 <!-- Switch Link -->
@@ -107,7 +115,7 @@ export function renderOnboardingView(container, { onComplete, showToast }) {
                     <span style="position: absolute; left: 14px; display: flex; align-items: center; justify-content: center;">
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#71717A" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
                     </span>
-                    <input type="tel" id="input-onboard-phone" class="form-input-pill" style="padding-left: 42px; width: 100%; height: 46px; border-radius: 14px; border: 1.5px solid #E4E4E7; background: #FFFFFF; font-size: 14px; padding-right: 14px;" placeholder="0300 1234567" required />
+                    <input type="tel" id="input-onboard-phone" class="form-input-pill" style="padding-left: 42px; width: 100%; height: 46px; border-radius: 14px; border: 1.5px solid #E4E4E7; background: #FFFFFF; font-size: 14px; padding-right: 14px;" placeholder="0300 1234567" maxlength="13" required />
                   </div>
                 </div>
 
@@ -115,17 +123,20 @@ export function renderOnboardingView(container, { onComplete, showToast }) {
                 <div class="form-group" style="margin-bottom: 14px;">
                   <label class="form-label-uppercase" style="font-size: 11px; font-weight: 700; color: #71717A; letter-spacing: 0.05em; display: block; margin-bottom: 6px;">PREFERRED PAYOUT METHOD</label>
                   <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                    <div class="payout-option-card ${selectedPayout === PaymentMethods.EASYPAISA ? 'active' : ''}" data-method="${PaymentMethods.EASYPAISA}">
+                    <div class="payout-option-card ${selectedPayout === 'easypaisa' ? 'active' : ''}" data-method="easypaisa">
                       <span style="font-weight: 700; font-size: 13px;">EasyPaisa</span>
                     </div>
-                    <div class="payout-option-card ${selectedPayout === PaymentMethods.JAZZCASH ? 'active' : ''}" data-method="${PaymentMethods.JAZZCASH}">
+                    <div class="payout-option-card ${selectedPayout === 'jazzcash' ? 'active' : ''}" data-method="jazzcash">
                       <span style="font-weight: 700; font-size: 13px;">JazzCash</span>
                     </div>
                     <div class="payout-option-card ${selectedPayout === 'sadapay' ? 'active' : ''}" data-method="sadapay">
                       <span style="font-weight: 700; font-size: 13px;">SadaPay</span>
                     </div>
-                    <div class="payout-option-card ${selectedPayout === PaymentMethods.RAAST || selectedPayout === PaymentMethods.BANK ? 'active' : ''}" data-method="${PaymentMethods.RAAST}">
-                      <span style="font-weight: 700; font-size: 13px;">Bank / Raast</span>
+                    <div class="payout-option-card ${selectedPayout === 'nayapay' ? 'active' : ''}" data-method="nayapay">
+                      <span style="font-weight: 700; font-size: 13px;">NayaPay</span>
+                    </div>
+                    <div class="payout-option-card ${selectedPayout === 'bank' ? 'active' : ''}" data-method="bank" style="grid-column: span 2;">
+                      <span style="font-weight: 700; font-size: 13px;">Bank Account</span>
                     </div>
                   </div>
                 </div>
@@ -220,44 +231,17 @@ export function renderOnboardingView(container, { onComplete, showToast }) {
         const phoneInput = document.getElementById('input-onboard-phone');
         const accInput = document.getElementById('input-onboard-acc');
         if (nameInput) nameInput.value = 'Aown Raza';
-        if (phoneInput) phoneInput.value = '+92 300 1234567';
+        if (phoneInput) phoneInput.value = '0300 1234567';
         if (accInput) accInput.value = '03001234567';
-        selectedPayout = PaymentMethods.EASYPAISA;
+        selectedPayout = 'easypaisa';
         cards.forEach(c => {
-          if (c.getAttribute('data-method') === PaymentMethods.EASYPAISA) {
+          if (c.getAttribute('data-method') === 'easypaisa') {
             c.classList.add('active');
           } else {
             c.classList.remove('active');
           }
         });
         if (showToast) showToast('Filled with demo profile data!');
-      });
-    }
-
-    // Quick demo signin
-    const quickSignInBtn = document.getElementById('btn-quick-demo-signin');
-    if (quickSignInBtn) {
-      quickSignInBtn.addEventListener('click', () => {
-        const demoUser = {
-          id: 'usr_aown',
-          name: 'Aown Raza',
-          verifiedPhone: '+92 300 1234567',
-          phone: '+92 300 1234567',
-          paymentMethod: 'EasyPaisa',
-          paymentNumber: '03001234567',
-          accountNumber: '03001234567',
-          accountTitle: 'Aown Raza',
-          isNewUser: false,
-          stats: {
-            activeCommittees: 2,
-            completedCommittees: 1,
-            totalContributions: 30000,
-            totalPayouts: 60000,
-          },
-          createdAt: new Date().toISOString()
-        };
-        storageService.setCurrentUser(demoUser);
-        if (typeof onComplete === 'function') onComplete(demoUser);
       });
     }
 
@@ -271,17 +255,21 @@ export function renderOnboardingView(container, { onComplete, showToast }) {
           if (showToast) showToast('Please enter your phone number');
           return;
         }
+        if (!isValidPakistaniPhone(phoneVal)) {
+          if (showToast) showToast('Please enter a valid 11-digit Pakistani mobile number (e.g. 0300 1234567)');
+          return;
+        }
 
-        const clean = phoneVal.replace(/[^0-9]/g, '');
-        const isDemo = clean.includes('3001234567');
+        const clean = normalizePakistaniPhone(phoneVal);
+        const isDemo = clean === '03001234567';
 
         let userToLogin;
         if (isDemo) {
           userToLogin = {
             id: 'usr_aown',
             name: 'Aown Raza',
-            verifiedPhone: '+92 300 1234567',
-            phone: '+92 300 1234567',
+            verifiedPhone: '0300 1234567',
+            phone: '0300 1234567',
             paymentMethod: 'EasyPaisa',
             paymentNumber: '03001234567',
             accountNumber: '03001234567',
@@ -297,18 +285,19 @@ export function renderOnboardingView(container, { onComplete, showToast }) {
           };
         } else {
           const storedUsers = storageService.getUsers();
-          const found = storedUsers.find(u => (u.verifiedPhone || u.phone || '').replace(/[^0-9]/g, '') === clean);
+          const found = storedUsers.find(u => normalizePakistaniPhone(u.verifiedPhone || u.phone) === clean);
           if (found) {
             userToLogin = found;
           } else {
+            const formattedPhone = `${clean.slice(0, 4)} ${clean.slice(4)}`;
             userToLogin = {
               id: 'usr_' + clean,
               name: `User ${clean.slice(-4) || '92'}`,
-              verifiedPhone: phoneVal,
-              phone: phoneVal,
+              verifiedPhone: formattedPhone,
+              phone: formattedPhone,
               paymentMethod: 'EasyPaisa',
-              paymentNumber: phoneVal,
-              accountNumber: phoneVal,
+              paymentNumber: formattedPhone,
+              accountNumber: formattedPhone,
               accountTitle: 'Account Holder',
               isNewUser: false,
               stats: {
@@ -346,9 +335,14 @@ export function renderOnboardingView(container, { onComplete, showToast }) {
           if (showToast) showToast('Please enter your phone number');
           return;
         }
+        if (!isValidPakistaniPhone(phoneVal)) {
+          if (showToast) showToast('Please enter a valid 11-digit Pakistani mobile number (e.g. 0300 1234567)');
+          return;
+        }
 
-        const cleanPhone = phoneVal.startsWith('+') ? phoneVal : '+92' + phoneVal.replace(/^0+/, '');
-        const isDemo = cleanPhone.includes('3001234567') || nameVal.toLowerCase().includes('aown');
+        const normPhone = normalizePakistaniPhone(phoneVal);
+        const cleanPhone = `${normPhone.slice(0, 4)} ${normPhone.slice(4)}`;
+        const isDemo = normPhone === '03001234567' || nameVal.toLowerCase().includes('aown');
         const newUser = {
           id: isDemo ? 'usr_aown' : ('usr_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 4)),
           name: nameVal,
@@ -370,7 +364,7 @@ export function renderOnboardingView(container, { onComplete, showToast }) {
 
         storageService.setCurrentUser(newUser);
         const users = storageService.getUsers();
-        const existingIdx = users.findIndex(u => u.verifiedPhone === cleanPhone || u.id === newUser.id);
+        const existingIdx = users.findIndex(u => normalizePakistaniPhone(u.verifiedPhone || u.phone) === normPhone || u.id === newUser.id);
         if (existingIdx >= 0) {
           users[existingIdx] = newUser;
         } else {

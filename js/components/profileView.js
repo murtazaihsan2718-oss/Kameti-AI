@@ -53,7 +53,7 @@ export function renderProfileView(container, { onBack, onLogout, onReload, showT
                 <option value="${PaymentMethods.JAZZCASH}" ${user?.paymentMethod === PaymentMethods.JAZZCASH ? 'selected' : ''}>JazzCash</option>
                 <option value="${PaymentMethods.SADAPAY}" ${user?.paymentMethod === PaymentMethods.SADAPAY ? 'selected' : ''}>SadaPay</option>
                 <option value="${PaymentMethods.NAYAPAY}" ${user?.paymentMethod === PaymentMethods.NAYAPAY ? 'selected' : ''}>NayaPay</option>
-                <option value="${PaymentMethods.RAAST}" ${user?.paymentMethod === PaymentMethods.RAAST ? 'selected' : ''}>Bank Transfer (Raast)</option>
+                <option value="${PaymentMethods.BANK}" ${user?.paymentMethod === PaymentMethods.BANK || user?.paymentMethod === 'raast' || user?.paymentMethod === 'bank' ? 'selected' : ''}>Bank Account</option>
               </select>
             </div>
 

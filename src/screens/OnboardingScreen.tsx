@@ -18,11 +18,31 @@ interface OnboardingScreenProps {
   onComplete: (user: UserProfile) => void;
 }
 
+function isValidPakistaniPhone(raw: string): boolean {
+  const digits = (raw || '').replace(/[^0-9]/g, '');
+  if (/^03\d{9}$/.test(digits)) return true;
+  if (/^923\d{9}$/.test(digits)) return true;
+  if (/^3\d{9}$/.test(digits)) return true;
+  return false;
+}
+
+function normalizePakistaniPhone(raw: string): string {
+  const digits = (raw || '').replace(/[^0-9]/g, '');
+  if (digits.startsWith('92') && digits.length === 12) {
+    return '0' + digits.slice(2);
+  }
+  if (digits.startsWith('3') && digits.length === 10) {
+    return '0' + digits;
+  }
+  return digits;
+}
+
 const PAYMENT_OPTIONS: { label: string; value: PaymentMethod }[] = [
   { label: 'EasyPaisa', value: 'easypaisa' },
   { label: 'JazzCash', value: 'jazzcash' },
   { label: 'SadaPay', value: 'sadapay' },
-  { label: 'Bank / Raast', value: 'raast' },
+  { label: 'NayaPay', value: 'nayapay' },
+  { label: 'Bank Account', value: 'bank' },
 ];
 
 export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }) => {
@@ -42,9 +62,14 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }
       Alert.alert('Required', 'Please enter your phone number.');
       return;
     }
+    if (!isValidPakistaniPhone(phone)) {
+      Alert.alert('Invalid Phone Number', 'Please enter a valid 11-digit Pakistani mobile number (e.g. 0300 1234567).');
+      return;
+    }
 
-    const cleanPhone = phone.trim();
-    const isDemo = cleanPhone.includes('3001234567') || name.toLowerCase().includes('aown');
+    const normPhone = normalizePakistaniPhone(phone);
+    const cleanPhone = normPhone.startsWith('03') ? `${normPhone.slice(0, 4)} ${normPhone.slice(4)}` : normPhone;
+    const isDemo = normPhone === '03001234567' || name.toLowerCase().includes('aown');
     const newUser: UserProfile = {
       id: isDemo ? 'usr_aown' : 'u_' + Date.now().toString(36),
       name: name.trim(),
@@ -70,16 +95,20 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }
       Alert.alert('Required', 'Please enter your phone number to sign in.');
       return;
     }
+    if (!isValidPakistaniPhone(signInPhone)) {
+      Alert.alert('Invalid Phone Number', 'Please enter a valid 11-digit Pakistani mobile number (e.g. 0300 1234567).');
+      return;
+    }
 
-    const clean = signInPhone.replace(/[^0-9]/g, '');
-    const isDemo = clean.includes('3001234567');
+    const clean = normalizePakistaniPhone(signInPhone);
+    const isDemo = clean === '03001234567';
 
     let userToLogin: UserProfile;
     if (isDemo) {
       userToLogin = {
         id: 'usr_aown',
         name: 'Aown Raza',
-        phone: '+92 300 1234567',
+        phone: '0300 1234567',
         paymentMethod: 'easypaisa',
         accountNumber: '03001234567',
         accountTitle: 'Aown Raza',
@@ -92,17 +121,18 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }
         },
       };
     } else {
-      // Check stored user or generate session
       const storedUser = await nativeStorageService.getUser();
-      if (storedUser && (storedUser.phone || '').replace(/[^0-9]/g, '') === clean) {
+      const storedClean = storedUser ? normalizePakistaniPhone(storedUser.phone) : '';
+      if (storedUser && storedClean === clean) {
         userToLogin = storedUser;
       } else {
+        const formattedPhone = `${clean.slice(0, 4)} ${clean.slice(4)}`;
         userToLogin = {
           id: 'u_' + clean,
           name: storedUser?.name || `User ${clean.slice(-4) || '92'}`,
-          phone: signInPhone.trim(),
+          phone: formattedPhone,
           paymentMethod: 'easypaisa',
-          accountNumber: signInPhone.trim(),
+          accountNumber: formattedPhone,
           accountTitle: storedUser?.name || 'Account Holder',
           isNewUser: false,
           stats: {
@@ -121,29 +151,9 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }
 
   const handleQuickDemoFill = () => {
     setName('Aown Raza');
-    setPhone('+92 300 1234567');
+    setPhone('0300 1234567');
     setPaymentMethod('easypaisa');
     setAccountNumber('03001234567');
-  };
-
-  const handleQuickDemoSignIn = async () => {
-    const demoUser: UserProfile = {
-      id: 'usr_aown',
-      name: 'Aown Raza',
-      phone: '+92 300 1234567',
-      paymentMethod: 'easypaisa',
-      accountNumber: '03001234567',
-      accountTitle: 'Aown Raza',
-      isNewUser: false,
-      stats: {
-        activeCommittees: 2,
-        completedCommittees: 1,
-        totalContributions: 30000,
-        totalPayouts: 60000,
-      },
-    };
-    await nativeStorageService.login(demoUser);
-    onComplete(demoUser);
   };
 
   return (
@@ -210,6 +220,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }
                     placeholder="0300 1234567"
                     placeholderTextColor="#A1A1AA"
                     keyboardType="phone-pad"
+                    maxLength={13}
                     autoFocus
                   />
                 </View>
@@ -224,17 +235,6 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }
               >
                 <Text style={styles.startBtnText}>Sign In</Text>
                 <ArrowRight size={17} color="#FFFFFF" strokeWidth={2.5} style={{ marginLeft: 6 }} />
-              </TactilePressable>
-
-              {/* Quick Demo Sign In Button */}
-              <TactilePressable
-                style={styles.demoFillBtn}
-                haptic="selection"
-                scaleTo={0.97}
-                onPress={handleQuickDemoSignIn}
-              >
-                <Zap size={14} color="#71717A" strokeWidth={2} style={{ marginRight: 6 }} />
-                <Text style={styles.demoFillBtnText}>⚡ Sign In as Demo (Aown Raza)</Text>
               </TactilePressable>
 
               {/* Switch to Sign Up */}
@@ -284,6 +284,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }
                     placeholder="0300 1234567"
                     placeholderTextColor="#A1A1AA"
                     keyboardType="phone-pad"
+                    maxLength={13}
                   />
                 </View>
               </View>
