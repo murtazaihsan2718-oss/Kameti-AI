@@ -253,68 +253,77 @@ export function renderOnboardingView(container, { onComplete, showToast }) {
     if (signinForm) {
       signinForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const phoneVal = document.getElementById('input-signin-phone')?.value.trim();
-        if (!phoneVal) {
-          if (showToast) showToast('Please enter your phone number');
-          return;
-        }
-        if (!isValidPakistaniPhone(phoneVal)) {
-          if (showToast) showToast('Please enter a valid 11-digit Pakistani mobile number (e.g. 0300 1234567)');
-          return;
-        }
-
-        const clean = normalizePakistaniPhone(phoneVal);
-        const isDemo = clean === '03001234567';
-
-        let userToLogin = null;
-        if (isDemo) {
-          userToLogin = {
-            id: 'usr_aown',
-            name: 'Aown Raza',
-            verifiedPhone: '0300 1234567',
-            phone: '0300 1234567',
-            paymentMethod: 'EasyPaisa',
-            paymentNumber: '03001234567',
-            accountNumber: '03001234567',
-            accountTitle: 'Aown Raza',
-            isNewUser: false,
-            stats: {
-              activeCommittees: 2,
-              completedCommittees: 1,
-              totalContributions: 30000,
-              totalPayouts: 60000,
-            },
-            createdAt: new Date().toISOString()
-          };
-        } else {
-          const storedUsers = storageService.getUsers();
-          const found = storedUsers.find(u => normalizePakistaniPhone(u.verifiedPhone || u.phone) === clean);
-          if (found) {
-            userToLogin = found;
-          } else {
-            userToLogin = await FirebaseService.getUserProfileByPhone(clean);
+        try {
+          const phoneVal = document.getElementById('input-signin-phone')?.value.trim();
+          if (!phoneVal) {
+            if (showToast) showToast('Please enter your phone number');
+            return;
           }
-        }
-
-        if (userToLogin) {
-          storageService.setCurrentUser(userToLogin);
-          const users = storageService.getUsers();
-          const idx = users.findIndex(u => u.id === userToLogin.id || normalizePakistaniPhone(u.verifiedPhone || u.phone) === clean);
-          if (idx >= 0) {
-            users[idx] = userToLogin;
-          } else {
-            users.push(userToLogin);
+          if (!isValidPakistaniPhone(phoneVal)) {
+            if (showToast) showToast('Please enter a valid 11-digit Pakistani mobile number (e.g. 0300 1234567)');
+            return;
           }
-          storageService.setUsers(users);
-          await FirebaseService.saveUserProfile(userToLogin);
-          if (typeof onComplete === 'function') onComplete(userToLogin);
-        } else {
-          const formattedPhone = clean.startsWith('03') ? `${clean.slice(0, 4)} ${clean.slice(4)}` : clean;
-          authMode = 'signup';
-          render();
-          const phoneInput = document.getElementById('input-onboard-phone');
-          if (phoneInput) phoneInput.value = formattedPhone;
-          if (showToast) showToast(`No profile found for ${formattedPhone}. Please enter your name to create one.`);
+
+          const clean = normalizePakistaniPhone(phoneVal);
+          const isDemo = clean === '03001234567';
+
+          let userToLogin = null;
+          if (isDemo) {
+            userToLogin = {
+              id: 'usr_aown',
+              name: 'Aown Raza',
+              verifiedPhone: '0300 1234567',
+              phone: '0300 1234567',
+              paymentMethod: 'EasyPaisa',
+              paymentNumber: '03001234567',
+              accountNumber: '03001234567',
+              accountTitle: 'Aown Raza',
+              isNewUser: false,
+              stats: {
+                activeCommittees: 2,
+                completedCommittees: 1,
+                totalContributions: 30000,
+                totalPayouts: 60000,
+              },
+              createdAt: new Date().toISOString()
+            };
+          } else {
+            const storedUsers = storageService.getUsers();
+            const found = storedUsers.find(u => normalizePakistaniPhone(u.verifiedPhone || u.phone) === clean);
+            if (found) {
+              userToLogin = found;
+            } else {
+              try {
+                userToLogin = await FirebaseService.getUserProfileByPhone(clean);
+              } catch (err) {
+                console.log('[Onboarding Web] Cloud user fetch notice:', err);
+              }
+            }
+          }
+
+          if (userToLogin) {
+            storageService.setCurrentUser(userToLogin);
+            const users = storageService.getUsers();
+            const idx = users.findIndex(u => u.id === userToLogin.id || normalizePakistaniPhone(u.verifiedPhone || u.phone) === clean);
+            if (idx >= 0) {
+              users[idx] = userToLogin;
+            } else {
+              users.push(userToLogin);
+            }
+            storageService.setUsers(users);
+            FirebaseService.saveUserProfile(userToLogin).catch(err => console.warn('Cloud sync error:', err));
+            if (typeof onComplete === 'function') onComplete(userToLogin);
+          } else {
+            const formattedPhone = clean.startsWith('03') ? `${clean.slice(0, 4)} ${clean.slice(4)}` : clean;
+            authMode = 'signup';
+            render();
+            const phoneInput = document.getElementById('input-onboard-phone');
+            if (phoneInput) phoneInput.value = formattedPhone;
+            if (showToast) showToast(`No profile found for ${formattedPhone}. Please enter your name to create one.`);
+          }
+        } catch (err) {
+          console.error('[Onboarding Web] Error signing in:', err);
+          if (showToast) showToast('Error signing in: ' + (err.message || 'Please try again'));
         }
       });
     }
@@ -324,66 +333,79 @@ export function renderOnboardingView(container, { onComplete, showToast }) {
     if (signupForm) {
       signupForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const nameVal = document.getElementById('input-onboard-name').value.trim();
-        const phoneVal = document.getElementById('input-onboard-phone').value.trim();
-        const accVal = document.getElementById('input-onboard-acc')?.value.trim() || '';
+        try {
+          const nameVal = document.getElementById('input-onboard-name')?.value.trim() || '';
+          const phoneVal = document.getElementById('input-onboard-phone')?.value.trim() || '';
+          const accVal = document.getElementById('input-onboard-acc')?.value.trim() || '';
 
-        if (!nameVal) {
-          if (showToast) showToast('Please enter your full name');
-          return;
-        }
-        if (!phoneVal) {
-          if (showToast) showToast('Please enter your phone number');
-          return;
-        }
-        if (!isValidPakistaniPhone(phoneVal)) {
-          if (showToast) showToast('Please enter a valid 11-digit Pakistani mobile number (e.g. 0300 1234567)');
-          return;
-        }
+          if (!nameVal) {
+            if (showToast) showToast('Please enter your full name');
+            return;
+          }
+          if (!phoneVal) {
+            if (showToast) showToast('Please enter your phone number');
+            return;
+          }
+          if (!isValidPakistaniPhone(phoneVal)) {
+            if (showToast) showToast('Please enter a valid 11-digit Pakistani mobile number (e.g. 0300 1234567)');
+            return;
+          }
 
-        const normPhone = normalizePakistaniPhone(phoneVal);
-        const cleanPhone = `${normPhone.slice(0, 4)} ${normPhone.slice(4)}`;
-        const isDemo = normPhone === '03001234567' || nameVal.toLowerCase().includes('aown');
+          const normPhone = normalizePakistaniPhone(phoneVal);
+          const cleanPhone = `${normPhone.slice(0, 4)} ${normPhone.slice(4)}`;
+          const isDemo = normPhone === '03001234567' || nameVal.toLowerCase().includes('aown');
 
-        // Check if profile exists locally or in Cloud
-        let existing = storageService.getUsers().find(u => normalizePakistaniPhone(u.verifiedPhone || u.phone) === normPhone);
-        if (!existing && !isDemo) {
-          existing = await FirebaseService.getUserProfileByPhone(normPhone);
-        }
+          // Check if profile exists locally or in Cloud
+          let existing = storageService.getUsers().find(u => normalizePakistaniPhone(u.verifiedPhone || u.phone) === normPhone);
+          if (!existing && !isDemo) {
+            try {
+              existing = await FirebaseService.getUserProfileByPhone(normPhone);
+            } catch (err) {
+              console.log('[Onboarding Web] Cloud lookup notice:', err);
+            }
+          }
 
-        const userId = isDemo ? 'usr_aown' : (existing?.id || ('u_' + normPhone));
-        const newUser = {
-          id: userId,
-          name: nameVal,
-          verifiedPhone: cleanPhone,
-          phone: cleanPhone,
-          paymentMethod: selectedPayout,
-          paymentNumber: accVal || cleanPhone,
-          accountNumber: accVal || cleanPhone,
-          accountTitle: nameVal,
-          isNewUser: false,
-          stats: existing?.stats || {
-            activeCommittees: 0,
-            completedCommittees: 0,
-            totalContributions: 0,
-            totalPayouts: 0,
-          },
-          createdAt: new Date().toISOString()
-        };
+          const userId = isDemo ? 'usr_aown' : (existing?.id || ('u_' + normPhone));
+          const newUser = {
+            id: userId,
+            name: nameVal,
+            verifiedPhone: cleanPhone,
+            phone: cleanPhone,
+            paymentMethod: selectedPayout,
+            paymentNumber: accVal || cleanPhone,
+            accountNumber: accVal || cleanPhone,
+            accountTitle: nameVal,
+            isNewUser: false,
+            stats: existing?.stats || {
+              activeCommittees: 0,
+              completedCommittees: 0,
+              totalContributions: 0,
+              totalPayouts: 0,
+            },
+            createdAt: new Date().toISOString()
+          };
 
-        storageService.setCurrentUser(newUser);
-        const users = storageService.getUsers();
-        const existingIdx = users.findIndex(u => normalizePakistaniPhone(u.verifiedPhone || u.phone) === normPhone || u.id === newUser.id);
-        if (existingIdx >= 0) {
-          users[existingIdx] = newUser;
-        } else {
-          users.push(newUser);
-        }
-        storageService.setUsers(users);
-        await FirebaseService.saveUserProfile(newUser);
+          storageService.setCurrentUser(newUser);
+          const users = storageService.getUsers();
+          const existingIdx = users.findIndex(u => normalizePakistaniPhone(u.verifiedPhone || u.phone) === normPhone || u.id === newUser.id);
+          if (existingIdx >= 0) {
+            users[existingIdx] = newUser;
+          } else {
+            users.push(newUser);
+          }
+          storageService.setUsers(users);
 
-        if (typeof onComplete === 'function') {
-          onComplete(newUser);
+          // Non-blocking background save to Cloud Firestore
+          FirebaseService.saveUserProfile(newUser).catch(err => {
+            console.warn('[Onboarding Web] Cloud save notice:', err);
+          });
+
+          if (typeof onComplete === 'function') {
+            onComplete(newUser);
+          }
+        } catch (err) {
+          console.error('[Onboarding Web] Error creating profile:', err);
+          if (showToast) showToast('Error creating profile: ' + (err.message || 'Please try again'));
         }
       });
     }
