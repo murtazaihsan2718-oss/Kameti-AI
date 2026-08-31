@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, Pressable, Platform, SafeAreaView, StatusBar as RNStatusBar, Animated, Easing, Keyboard } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Platform, StatusBar as RNStatusBar, Animated, Easing, Keyboard } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import * as Linking from 'expo-linking';
 import * as NavigationBar from 'expo-navigation-bar';
 import { LayoutGrid, Bot, Clock } from 'lucide-react-native';
@@ -333,7 +333,7 @@ export default function App() {
         style="dark"
         translucent={true}
       />
-      <SafeAreaView style={[styles.safeArea, { paddingTop: topPaddingValue }]}>
+      <SafeAreaView style={[styles.safeArea, { paddingTop: topPaddingValue }]} edges={['left', 'right']}>
         {!currentUser ? (
           <OnboardingScreen
             onComplete={(user) => {
@@ -436,7 +436,7 @@ const styles = StyleSheet.create({
   },
   floatingDockContainer: {
     position: 'absolute',
-    bottom: Platform.OS === 'ios' ? 2 : 4,
+    bottom: Platform.OS === 'ios' ? 24 : 12,
     left: 20,
     right: 20,
     zIndex: 100,
