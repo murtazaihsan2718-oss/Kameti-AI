@@ -15,104 +15,107 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onNavigate, onOpenVoice 
   const [user, setUser] = useState<UserProfile | null>(null);
   const [committees, setCommittees] = useState<Committee[]>([]);
 
+  function filterUserCommittees(allCommittees: Committee[], currentUser: UserProfile | null): Committee[] {
+    if (!currentUser) return [];
+
+    const userPhone = (currentUser.phone || '').replace(/[^0-9]/g, '');
+    const userName = (currentUser.name || '').trim().toLowerCase().replace('(you)', '').trim();
+    const isDemoUser = currentUser.id === 'usr_aown' || userName.includes('aown');
+
+    return allCommittees.filter(c => {
+      // 1. Creator match
+      if ((c as any).creatorId === currentUser.id) return true;
+
+      // 2. Member list match
+      if (c.members && Array.isArray(c.members)) {
+        const isMember = c.members.some(m => {
+          const mPhone = (m.phone || '').replace(/[^0-9]/g, '');
+          const mName = (m.name || '').trim().toLowerCase().replace('(you)', '').trim();
+          if (m.id === currentUser.id || (m as any).userId === currentUser.id) return true;
+          if (userPhone && mPhone && userPhone === mPhone) return true;
+          if (userName && mName && userName === mName) return true;
+          return false;
+        });
+        if (isMember) return true;
+      }
+
+      // 3. Demo profile specifically gets seeded sample committees
+      if (isDemoUser) {
+        return c.id === 'c_family' || c.id === 'c_office' || c.id === 'com_friends_2026' || c.id === 'com_office_2026';
+      }
+
+      return false;
+    });
+  }
+
   useEffect(() => {
     loadData();
     const unsubscribe = nativeStorageService.subscribe(loadData);
     
     // Cloud Firestore live listener
     const unsubCloud = FirebaseService.subscribeCommittees(async (cloudList) => {
-      if (cloudList) {
-        if (cloudList.length > 0) {
-          const local = await nativeStorageService.getCommittees();
-          cloudList.forEach(cc => {
-            const matchIdx = local.findIndex(lc => {
-              if (lc.id === cc.id) {
-                return true;
-              }
-              if (lc.joinCode && cc.joinCode && lc.joinCode.toUpperCase() === cc.joinCode.toUpperCase()) {
-                return true;
-              }
-              return false;
+      if (cloudList && cloudList.length > 0) {
+        const currentUser = await nativeStorageService.getUser();
+        if (!currentUser) return;
+
+        const local = await nativeStorageService.getCommittees();
+        let hasChanges = false;
+
+        cloudList.forEach(cc => {
+          const matchIdx = local.findIndex(lc => 
+            lc.id === cc.id || 
+            (lc.joinCode && cc.joinCode && lc.joinCode.toUpperCase() === cc.joinCode.toUpperCase())
+          );
+
+          let membersList: Member[] = cc.members || [];
+
+          if (matchIdx >= 0) {
+            local[matchIdx] = {
+              ...local[matchIdx],
+              ...cc,
+              members: membersList,
+              memberCount: membersList.length > 0 ? membersList.length : local[matchIdx].memberCount,
+            };
+            hasChanges = true;
+          } else {
+            // Only add cloud committee if current user is creator or in members!
+            const userPhone = (currentUser.phone || '').replace(/[^0-9]/g, '');
+            const userName = (currentUser.name || '').trim().toLowerCase().replace('(you)', '').trim();
+            const isCreator = (cc as any).creatorId === currentUser.id;
+            const isMember = membersList.some(m => {
+              const mPhone = (m.phone || '').replace(/[^0-9]/g, '');
+              const mName = (m.name || '').trim().toLowerCase().replace('(you)', '').trim();
+              return m.id === currentUser.id || (m as any).userId === currentUser.id || (userPhone && mPhone && userPhone === mPhone) || (userName && mName && userName === mName);
             });
 
-            let membersList: Member[] = [];
-            if (cc.members) {
-              membersList = cc.members;
-            }
-
-            if (matchIdx >= 0) {
-              local[matchIdx] = {
-                ...local[matchIdx],
-                ...cc,
-                members: membersList,
-                memberCount: membersList.length > 0 ? membersList.length : local[matchIdx].memberCount,
-              };
-            } else {
-              let memberCountVal = 5;
-              if (cc.memberCount) {
-                memberCountVal = cc.memberCount;
-              } else if (cc.numberOfMembers) {
-                memberCountVal = cc.numberOfMembers;
-              }
-
-              let startVal = new Date().toISOString().split('T')[0];
-              if (cc.startDate) {
-                startVal = cc.startDate;
-              }
-
-              let totalCyclesVal = 5;
-              if (cc.totalCycles) {
-                totalCyclesVal = cc.totalCycles;
-              }
-
-              let recipientVal = '';
-              if (cc.currentRecipientId) {
-                recipientVal = cc.currentRecipientId;
-              }
-
-              let freqVal: 'monthly' | 'custom' = 'monthly';
-              if (cc.frequency === 'custom') {
-                freqVal = 'custom';
-              }
-
-              let currentCycleVal = 1;
-              if (cc.currentCycle) {
-                currentCycleVal = cc.currentCycle;
-              }
-
-              let statusVal: CommitteeStatus = 'active';
-              if (cc.status) {
-                statusVal = cc.status;
-              }
-
-              let selectModeVal: SelectionMode = 'random';
-              if (cc.selectionMode) {
-                selectModeVal = cc.selectionMode;
-              }
-
+            if (isCreator || isMember) {
               local.unshift({
                 id: cc.id,
                 name: cc.name,
                 joinCode: cc.joinCode,
                 contributionAmount: cc.contributionAmount,
-                memberCount: memberCountVal,
-                totalPool: memberCountVal * cc.contributionAmount,
-                startDate: startVal,
-                totalCycles: totalCyclesVal,
-                currentRecipientId: recipientVal,
-                duration: totalCyclesVal,
-                frequency: freqVal,
-                currentCycle: currentCycleVal,
-                status: statusVal,
-                selectionMode: selectModeVal,
+                memberCount: cc.memberCount || cc.numberOfMembers || 5,
+                totalPool: (cc.memberCount || 5) * cc.contributionAmount,
+                startDate: cc.startDate || new Date().toISOString().split('T')[0],
+                totalCycles: cc.totalCycles || 5,
+                currentRecipientId: cc.currentRecipientId || '',
+                duration: cc.totalCycles || 5,
+                frequency: cc.frequency === 'custom' ? 'custom' : 'monthly',
+                currentCycle: cc.currentCycle || 1,
+                status: cc.status || 'active',
+                selectionMode: cc.selectionMode || 'random',
                 members: membersList,
                 payments: [],
               });
+              hasChanges = true;
             }
-          });
+          }
+        });
+
+        if (hasChanges) {
           await nativeStorageService.saveCommittees(local);
-          setCommittees(local);
         }
+        setCommittees(filterUserCommittees(local, currentUser));
       }
     });
 
