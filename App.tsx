@@ -59,9 +59,8 @@ export default function App() {
       RNStatusBar.setTranslucent(true);
       RNStatusBar.setBackgroundColor('transparent');
       RNStatusBar.setBarStyle('dark-content');
-      // Hide Android bottom system navigation bar in sticky immersive mode
-      NavigationBar.setVisibilityAsync('hidden').catch(() => {});
-      NavigationBar.setBehaviorAsync('overlay-swipe').catch(() => {});
+      NavigationBar.setBackgroundColorAsync('#FFFFFF').catch(() => {});
+      NavigationBar.setButtonStyleAsync('dark').catch(() => {});
     }
 
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -69,9 +68,6 @@ export default function App() {
     const showSub = Keyboard.addListener(showEvent, () => setIsKeyboardOpen(true));
     const hideSub = Keyboard.addListener(hideEvent, () => {
       setIsKeyboardOpen(false);
-      if (Platform.OS === 'android') {
-        NavigationBar.setVisibilityAsync('hidden').catch(() => {});
-      }
     });
 
     nativeStorageService.init().then(async () => {
@@ -96,6 +92,7 @@ export default function App() {
     const subscription = Linking.addEventListener('url', (event) => {
       handleUrl(event.url);
     });
+
     return () => {
       showSub.remove();
       hideSub.remove();

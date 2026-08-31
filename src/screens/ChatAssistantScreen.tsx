@@ -148,8 +148,8 @@ const SUGGESTED_PROMPTS = [
   'What committees am I enrolled in?',
 ];
 
-// Floating dock height (54px) + bottom offset (4px) + breathing room (16px) = 74px
-const DOCK_CLEARANCE_HEIGHT = 74;
+// Floating dock height (54px) + bottom offset (12px) + breathing room (6px) = 72px (Android) / 84px (iOS)
+const DOCK_CLEARANCE_HEIGHT = Platform.OS === 'ios' ? 84 : 72;
 
 export const ChatAssistantScreen: React.FC<ChatAssistantScreenProps> = ({
   onBack,
@@ -350,11 +350,10 @@ export const ChatAssistantScreen: React.FC<ChatAssistantScreenProps> = ({
   };
 
   const hasText = inputText.trim().length > 0;
-  const bottomPadding = isKeyboardVisible ? 10 : DOCK_CLEARANCE_HEIGHT;
+  const bottomPadding = isKeyboardVisible ? 8 : DOCK_CLEARANCE_HEIGHT;
 
-  // On Android, KeyboardAvoidingView with behavior='height' is buggy and leaves
-  // residual offset after keyboard dismissal. Android's native adjustResize handles
-  // keyboard avoidance automatically, so we use a plain View on Android.
+  // On Android, Android's native adjustResize handles keyboard avoidance smoothly.
+  // On iOS, KeyboardAvoidingView ensures seamless transition.
   const Wrapper = Platform.OS === 'ios' ? KeyboardAvoidingView : View;
   const wrapperProps = Platform.OS === 'ios'
     ? { behavior: 'padding' as const, keyboardVerticalOffset: 70 }
@@ -372,6 +371,7 @@ export const ChatAssistantScreen: React.FC<ChatAssistantScreenProps> = ({
           haptic="selection"
           scaleTo={0.9}
           onPress={() => {
+            Keyboard.dismiss();
             textToSpeechService.stopSpeech();
             onBack();
           }}

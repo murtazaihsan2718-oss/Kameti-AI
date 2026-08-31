@@ -13,12 +13,15 @@
       "backgroundColor": "#FFFFFF"
     },
     "androidStatusBar": {
-      "hidden": true,
+      "hidden": false,
       "translucent": true,
-      "backgroundColor": "#00000000"
+      "backgroundColor": "#00000000",
+      "barStyle": "dark-content"
     },
     "androidNavigationBar": {
-      "visible": "immersive"
+      "visible": "default",
+      "backgroundColor": "#FFFFFF",
+      "barStyle": "dark-content"
     },
     "ios": {
       "supportsTablet": true,
