@@ -351,13 +351,12 @@ export const ChatAssistantScreen: React.FC<ChatAssistantScreenProps> = ({
 
   const hasText = inputText.trim().length > 0;
   const bottomPadding = isKeyboardVisible ? 6 : DOCK_CLEARANCE_HEIGHT;
-  const ContainerComponent = Platform.OS === 'ios' ? KeyboardAvoidingView : View;
-  const containerProps = Platform.OS === 'ios' ? { behavior: 'padding' as const, keyboardVerticalOffset: 60 } : {};
 
   return (
-    <ContainerComponent
+    <KeyboardAvoidingView
       style={styles.container}
-      {...containerProps}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 70 : 0}
     >
       {/* Top Header Bar */}
       <View style={styles.header}>
@@ -582,7 +581,7 @@ export const ChatAssistantScreen: React.FC<ChatAssistantScreenProps> = ({
           </TactilePressable>
         </View>
       </View>
-    </ContainerComponent>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -783,10 +782,10 @@ const styles = StyleSheet.create({
   },
   textInput: {
     flex: 1,
-    fontSize: 14,
+    fontSize: 15,
     color: '#000000',
-    fontWeight: '400',
-    paddingVertical: 4,
+    fontWeight: '500',
+    paddingVertical: Platform.OS === 'ios' ? 6 : 4,
   },
   micBtn: {
     width: 32,
