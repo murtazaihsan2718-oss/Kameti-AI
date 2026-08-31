@@ -1,6 +1,6 @@
 const https = require('https');
 
-const GEMINI_MODEL = 'gemini-3.5-flash';
+const GEMINI_MODEL = 'gemini-2.5-flash';
 
 function formatUserKametiContext(userContext) {
   if (!userContext || !userContext.committees || userContext.committees.length === 0) {
@@ -20,7 +20,7 @@ function formatUserKametiContext(userContext) {
     text += `  * Join Code: ${c.joinCode}\n`;
     text += `  * Committee Status: ${isForming ? 'WAITING FOR MEMBERS (STILL FORMING - NO DUES YET)' : 'ACTIVE / IN PROGRESS'}\n`;
     text += `  * Per-Member Monthly Contribution: PKR ${c.contributionAmount?.toLocaleString()}\n`;
-    text += `  * Total Payout Pool (Lump sum awarded to cycle recipient): PKR ${c.totalPool?.toLocaleString()}\n`;
+    text += `  * Total Payout Pool: PKR ${c.totalPool?.toLocaleString()}\n`;
     text += `  * Cycle Progress: ${isForming ? 'Not started (waiting for slots to fill)' : `Cycle ${c.currentCycle} of ${c.totalCycles}`}\n`;
     text += `  * Next Due Date: ${c.nextDueDate || (isForming ? 'Will be set when committee starts' : 'Not specified')}\n`;
     text += `  * User Payment Status for Current Cycle: ${isForming ? 'Not due (committee forming)' : (c.userPayment?.paymentStatus || 'pending')}\n`;
@@ -36,7 +36,7 @@ function buildSystemInstruction(userContext) {
 
   return `You are the Kameti Assistant, an expert, helpful, and concise assistant for the Kameti (کمیٹی) mobile app — an informal savings committee (ROSCA / Beesi / Chit fund) manager in Pakistan.
 You understand English, Urdu (اردو), and Pakistani Roman Urdu.
-Always respond in the same language and style that the user used (e.g., if the user asks in Roman Urdu, reply naturally in Roman Urdu; if in English, reply in English; if in Urdu script, reply in Urdu script).
+Always respond in the same language and style that the user used.
 
 ${contextBlock}
 
@@ -52,12 +52,69 @@ CRITICAL RULES & GROUNDING INSTRUCTIONS:
    - If the user has 0 active committees, politely inform them that they haven't created or joined an active committee yet.
 
 3. CONCISE & POLISHED:
-   - Keep answers clear, direct, and under 3-4 bullet points or 2 short paragraphs.
-   - Avoid generic robotic disclaimers.`;
+   - Keep answers clear, direct, and under 3-4 bullet points or 2 short paragraphs.`;
+}
+
+function generateSmartFallbackResponse(query, userContext) {
+  const q = (query || '').toLowerCase().trim();
+  const committees = userContext?.committees || [];
+  const activeCommittees = committees.filter(c => !c.status?.toLowerCase().includes('forming'));
+  const isRomanUrdu = /meri|mera|bari|paise|kitne|kab|kon|kis|bheje|jama|nahi|karega|karo|kaun|mujhe/.test(q);
+
+  // 1. Dues & Pending contributions
+  if (q.includes('owe') || q.includes('due') || q.includes('kitne paise') || q.includes('kitna dena') || q.includes('pending') || q.includes('pay this month')) {
+    const totalDue = userContext?.totalMonthlyContributionDue || 0;
+    if (totalDue === 0 || activeCommittees.length === 0) {
+      if (isRomanUrdu) return 'Aap ki tamam payments complete hain! Is mahine koi payment pending nahi hai.';
+      return 'Great news! You have no pending payments due for this month. All your contributions are up to date.';
+    }
+    const dueComms = activeCommittees.filter(c => c.userPayment?.paymentStatus === 'pending' && !c.payout?.isUserCurrentRecipient);
+    const details = dueComms.map(c => `• **${c.committeeName}**: PKR ${c.contributionAmount?.toLocaleString()} (Due to ${c.payout?.currentRecipientName || 'Recipient'})`).join('\n');
+    return `You have **PKR ${totalDue.toLocaleString()}** in pending contributions due this month:\n\n${details || 'No pending payments.'}`;
+  }
+
+  // 2. Payouts & Turns
+  if (q.includes('getting paid') || q.includes('payout') || q.includes('receive') || q.includes('meri bari') || q.includes('turn') || q.includes('mujhe kitnay') || q.includes('number')) {
+    const recipientComms = activeCommittees.filter(c => c.payout?.isUserCurrentRecipient);
+    if (recipientComms.length > 0) {
+      const details = recipientComms.map(c => `• **${c.committeeName}**: PKR ${c.totalPool?.toLocaleString()} (You are the designated recipient for Cycle ${c.currentCycle} of ${c.totalCycles})`).join('\n');
+      const totalPayout = recipientComms.reduce((acc, c) => acc + (c.totalPool || 0), 0);
+      return `This month, you are scheduled to receive a total payout of **PKR ${totalPayout.toLocaleString()}**:\n\n${details}`;
+    }
+    const upcoming = activeCommittees.map(c => `• **${c.committeeName}**: ${c.payout?.payoutTurnSummary || 'Scheduled in upcoming cycles'}`).join('\n');
+    return `You are not scheduled for a payout in this current cycle. Here is your turn status:\n\n${upcoming || 'No active committees.'}`;
+  }
+
+  // 3. Enrolled committees
+  if (q.includes('committee') || q.includes('enrolled') || q.includes('all committees')) {
+    if (committees.length === 0) {
+      return 'You are not currently enrolled in any committees. Tap "+ Create" or "Join" on the Home tab to get started!';
+    }
+    const list = committees.map(c => {
+      const isForming = c.status?.toLowerCase().includes('forming');
+      return `• **${c.committeeName}** (Join Code: \`${c.joinCode}\`)\n  * Monthly Contribution: PKR ${c.contributionAmount?.toLocaleString()}\n  * Total Pool: PKR ${c.totalPool?.toLocaleString()}\n  * Status: ${isForming ? 'Waiting for members (Not started)' : `Active (Cycle ${c.currentCycle} of ${c.totalCycles})`}`;
+    }).join('\n\n');
+    return `Here are your enrolled committees:\n\n${list}`;
+  }
+
+  // 4. How Kameti works
+  if (q.includes('how') && (q.includes('work') || q.includes('kameti') || q.includes('beesi') || q.includes('rosca'))) {
+    return `**How Kameti Works:**\n\n1. **Monthly Pooling**: A group of trusted members deposits a fixed monthly contribution into a common pool.\n2. **Fair Turn Allocation**: Each cycle, one member collects the full lump-sum payout (decided fairly via Lucky Draw or schedule).\n3. **Community Savings**: Enables debt-free, zero-interest lump-sum financing for every participant!`;
+  }
+
+  // General fallback
+  if (isRomanUrdu) {
+    return 'Main aap ki pending payments, bari ka turn, aur committee ke members ke bare mein madad kar sakta hoon. Aap kya janna chahte hain?';
+  }
+  return 'I can help you check your pending payments, payout turn, committee member statuses, or next payout date. What would you like to know?';
 }
 
 function callGeminiAPI(messagesList, userContext, apiKey) {
   return new Promise((resolve, reject) => {
+    if (!apiKey || !apiKey.startsWith('AIzaSy')) {
+      return reject(new Error('Invalid Gemini API Key format'));
+    }
+
     const systemInstruction = buildSystemInstruction(userContext);
     const contents = [];
 
@@ -108,8 +165,11 @@ function callGeminiAPI(messagesList, userContext, apiKey) {
           if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
             try {
               const data = JSON.parse(body);
-              const text = data.candidates?.[0]?.content?.parts?.[0]?.text || 'I could not generate a response.';
-              resolve(text);
+              const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+              if (text) {
+                return resolve(text);
+              }
+              reject(new Error('Empty Gemini response'));
             } catch (err) {
               reject(err);
             }
@@ -153,7 +213,7 @@ module.exports = async (req, res) => {
 
   const fullMessages = [...history, { sender: 'user', text: userText }];
 
-  const apiKey = process.env.GEMINI_API_KEY || 'AQ.Ab8RN6J6X47Dk-OizvBvLZGHKaAzzRqxNm9BuHdHSa5m5vlOqA';
+  const apiKey = process.env.GEMINI_API_KEY || '';
 
   try {
     const reply = await callGeminiAPI(fullMessages, userContext || null, apiKey);
@@ -163,10 +223,12 @@ module.exports = async (req, res) => {
       reply: reply 
     });
   } catch (err) {
-    console.error('Chat error:', err.message);
-    return res.status(500).json({ 
-      success: false, 
-      error: err.message || 'Error communicating with Gemini' 
+    console.warn('[Vercel AI Backend] Fallback to smart context response:', err.message);
+    const fallback = generateSmartFallbackResponse(userText, userContext);
+    return res.status(200).json({ 
+      success: true, 
+      response: fallback, 
+      reply: fallback 
     });
   }
 };
