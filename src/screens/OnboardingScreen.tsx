@@ -26,8 +26,10 @@ const PAYMENT_OPTIONS: { label: string; value: PaymentMethod }[] = [
 ];
 
 export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }) => {
+  const [authMode, setAuthMode] = useState<'signup' | 'signin'>('signup');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [signInPhone, setSignInPhone] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('easypaisa');
   const [accountNumber, setAccountNumber] = useState('');
 
@@ -42,8 +44,9 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }
     }
 
     const cleanPhone = phone.trim();
+    const isDemo = cleanPhone.includes('3001234567') || name.toLowerCase().includes('aown');
     const newUser: UserProfile = {
-      id: 'u_' + Date.now().toString(36),
+      id: isDemo ? 'usr_aown' : 'u_' + Date.now().toString(36),
       name: name.trim(),
       phone: cleanPhone,
       paymentMethod,
@@ -62,11 +65,85 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }
     onComplete(newUser);
   };
 
+  const handleSignIn = async () => {
+    if (!signInPhone.trim()) {
+      Alert.alert('Required', 'Please enter your phone number to sign in.');
+      return;
+    }
+
+    const clean = signInPhone.replace(/[^0-9]/g, '');
+    const isDemo = clean.includes('3001234567');
+
+    let userToLogin: UserProfile;
+    if (isDemo) {
+      userToLogin = {
+        id: 'usr_aown',
+        name: 'Aown Raza',
+        phone: '+92 300 1234567',
+        paymentMethod: 'easypaisa',
+        accountNumber: '03001234567',
+        accountTitle: 'Aown Raza',
+        isNewUser: false,
+        stats: {
+          activeCommittees: 2,
+          completedCommittees: 1,
+          totalContributions: 30000,
+          totalPayouts: 60000,
+        },
+      };
+    } else {
+      // Check stored user or generate session
+      const storedUser = await nativeStorageService.getUser();
+      if (storedUser && (storedUser.phone || '').replace(/[^0-9]/g, '') === clean) {
+        userToLogin = storedUser;
+      } else {
+        userToLogin = {
+          id: 'u_' + clean,
+          name: storedUser?.name || `User ${clean.slice(-4) || '92'}`,
+          phone: signInPhone.trim(),
+          paymentMethod: 'easypaisa',
+          accountNumber: signInPhone.trim(),
+          accountTitle: storedUser?.name || 'Account Holder',
+          isNewUser: false,
+          stats: {
+            activeCommittees: 0,
+            completedCommittees: 0,
+            totalContributions: 0,
+            totalPayouts: 0,
+          },
+        };
+      }
+    }
+
+    await nativeStorageService.login(userToLogin);
+    onComplete(userToLogin);
+  };
+
   const handleQuickDemoFill = () => {
     setName('Aown Raza');
     setPhone('+92 300 1234567');
     setPaymentMethod('easypaisa');
     setAccountNumber('03001234567');
+  };
+
+  const handleQuickDemoSignIn = async () => {
+    const demoUser: UserProfile = {
+      id: 'usr_aown',
+      name: 'Aown Raza',
+      phone: '+92 300 1234567',
+      paymentMethod: 'easypaisa',
+      accountNumber: '03001234567',
+      accountTitle: 'Aown Raza',
+      isNewUser: false,
+      stats: {
+        activeCommittees: 2,
+        completedCommittees: 1,
+        totalContributions: 30000,
+        totalPayouts: 60000,
+      },
+    };
+    await nativeStorageService.login(demoUser);
+    onComplete(demoUser);
   };
 
   return (
@@ -87,113 +164,212 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onComplete }
           </Text>
         </View>
 
-        {/* Profile Creation Card */}
+        {/* Card Form Container */}
         <View style={styles.formCard}>
-          <Text style={styles.cardHeaderTitle}>Sign In / Create Profile</Text>
-          <Text style={styles.cardHeaderSubtitle}>
-            Enter your details to track payments and join committees.
-          </Text>
+          
+          {/* Mode Switcher Tabs */}
+          <View style={styles.tabSwitcher}>
+            <TactilePressable
+              style={[styles.tabBtn, authMode === 'signup' && styles.tabBtnActive]}
+              scaleTo={0.96}
+              onPress={() => setAuthMode('signup')}
+            >
+              <Text style={[styles.tabBtnText, authMode === 'signup' && styles.tabBtnTextActive]}>
+                Create Profile
+              </Text>
+            </TactilePressable>
 
-          {/* Full Name */}
-          <View style={styles.formGroup}>
-            <Text style={styles.formLabel}>FULL NAME</Text>
-            <View style={styles.inputWithIcon}>
-              <User size={16} color="#71717A" strokeWidth={2} style={{ marginRight: 8 }} />
-              <TextInput
-                style={styles.textInput}
-                value={name}
-                onChangeText={setName}
-                placeholder="e.g. Aown Raza"
-                placeholderTextColor="#A1A1AA"
-                autoCapitalize="words"
-              />
-            </View>
+            <TactilePressable
+              style={[styles.tabBtn, authMode === 'signin' && styles.tabBtnActive]}
+              scaleTo={0.96}
+              onPress={() => setAuthMode('signin')}
+            >
+              <Text style={[styles.tabBtnText, authMode === 'signin' && styles.tabBtnTextActive]}>
+                Sign In
+              </Text>
+            </TactilePressable>
           </View>
 
-          {/* Phone Number */}
-          <View style={styles.formGroup}>
-            <Text style={styles.formLabel}>PHONE NUMBER</Text>
-            <View style={styles.inputWithIcon}>
-              <Phone size={16} color="#71717A" strokeWidth={2} style={{ marginRight: 8 }} />
-              <TextInput
-                style={styles.textInput}
-                value={phone}
-                onChangeText={setPhone}
-                placeholder="0300 1234567"
-                placeholderTextColor="#A1A1AA"
-                keyboardType="phone-pad"
-              />
+          {authMode === 'signin' ? (
+            /* SIGN IN FORM */
+            <View>
+              <Text style={styles.cardHeaderTitle}>Welcome Back</Text>
+              <Text style={styles.cardHeaderSubtitle}>
+                Enter your registered phone number to access your committees.
+              </Text>
+
+              {/* Phone Number */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>PHONE NUMBER</Text>
+                <View style={styles.inputWithIcon}>
+                  <Phone size={16} color="#71717A" strokeWidth={2} style={{ marginRight: 8 }} />
+                  <TextInput
+                    style={styles.textInput}
+                    value={signInPhone}
+                    onChangeText={setSignInPhone}
+                    placeholder="0300 1234567"
+                    placeholderTextColor="#A1A1AA"
+                    keyboardType="phone-pad"
+                    autoFocus
+                  />
+                </View>
+              </View>
+
+              {/* Sign In Button */}
+              <TactilePressable
+                style={styles.startBtn}
+                haptic="success"
+                scaleTo={0.97}
+                onPress={handleSignIn}
+              >
+                <Text style={styles.startBtnText}>Sign In</Text>
+                <ArrowRight size={17} color="#FFFFFF" strokeWidth={2.5} style={{ marginLeft: 6 }} />
+              </TactilePressable>
+
+              {/* Quick Demo Sign In Button */}
+              <TactilePressable
+                style={styles.demoFillBtn}
+                haptic="selection"
+                scaleTo={0.97}
+                onPress={handleQuickDemoSignIn}
+              >
+                <Zap size={14} color="#71717A" strokeWidth={2} style={{ marginRight: 6 }} />
+                <Text style={styles.demoFillBtnText}>⚡ Sign In as Demo (Aown Raza)</Text>
+              </TactilePressable>
+
+              {/* Switch to Sign Up */}
+              <TactilePressable
+                style={styles.switchModeLink}
+                scaleTo={0.97}
+                onPress={() => setAuthMode('signup')}
+              >
+                <Text style={styles.switchModeText}>
+                  Don't have an account? <Text style={{ fontWeight: '800', color: '#000000' }}>Create Profile</Text>
+                </Text>
+              </TactilePressable>
             </View>
-          </View>
+          ) : (
+            /* SIGN UP / CREATE PROFILE FORM */
+            <View>
+              <Text style={styles.cardHeaderTitle}>Create Profile</Text>
+              <Text style={styles.cardHeaderSubtitle}>
+                Enter your details to track payments and join committees.
+              </Text>
 
-          {/* Preferred Payment Method */}
-          <View style={styles.formGroup}>
-            <Text style={styles.formLabel}>PREFERRED PAYMENT METHOD</Text>
-            <View style={styles.paymentGrid}>
-              {PAYMENT_OPTIONS.map((opt) => {
-                const isSelected = paymentMethod === opt.value;
-                return (
-                  <TactilePressable
-                    key={opt.value}
-                    style={[styles.paymentPill, isSelected && styles.paymentPillActive]}
-                    scaleTo={0.96}
-                    haptic="selection"
-                    onPress={() => setPaymentMethod(opt.value)}
-                  >
-                    <Text
-                      style={[
-                        styles.paymentPillText,
-                        isSelected && styles.paymentPillTextActive,
-                      ]}
-                    >
-                      {opt.label}
-                    </Text>
-                    {isSelected && (
-                      <Check size={13} color="#FFFFFF" strokeWidth={3} style={{ marginLeft: 4 }} />
-                    )}
-                  </TactilePressable>
-                );
-              })}
+              {/* Full Name */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>FULL NAME</Text>
+                <View style={styles.inputWithIcon}>
+                  <User size={16} color="#71717A" strokeWidth={2} style={{ marginRight: 8 }} />
+                  <TextInput
+                    style={styles.textInput}
+                    value={name}
+                    onChangeText={setName}
+                    placeholder="e.g. Aown Raza"
+                    placeholderTextColor="#A1A1AA"
+                    autoCapitalize="words"
+                  />
+                </View>
+              </View>
+
+              {/* Phone Number */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>PHONE NUMBER</Text>
+                <View style={styles.inputWithIcon}>
+                  <Phone size={16} color="#71717A" strokeWidth={2} style={{ marginRight: 8 }} />
+                  <TextInput
+                    style={styles.textInput}
+                    value={phone}
+                    onChangeText={setPhone}
+                    placeholder="0300 1234567"
+                    placeholderTextColor="#A1A1AA"
+                    keyboardType="phone-pad"
+                  />
+                </View>
+              </View>
+
+              {/* Preferred Payment Method */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>PREFERRED PAYMENT METHOD</Text>
+                <View style={styles.paymentGrid}>
+                  {PAYMENT_OPTIONS.map((opt) => {
+                    const isSelected = paymentMethod === opt.value;
+                    return (
+                      <TactilePressable
+                        key={opt.value}
+                        style={[styles.paymentPill, isSelected && styles.paymentPillActive]}
+                        scaleTo={0.96}
+                        haptic="selection"
+                        onPress={() => setPaymentMethod(opt.value)}
+                      >
+                        <Text
+                          style={[
+                            styles.paymentPillText,
+                            isSelected && styles.paymentPillTextActive,
+                          ]}
+                        >
+                          {opt.label}
+                        </Text>
+                        {isSelected && (
+                          <Check size={13} color="#FFFFFF" strokeWidth={3} style={{ marginLeft: 4 }} />
+                        )}
+                      </TactilePressable>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Payment Account Number */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>PAYMENT ACCOUNT NUMBER (OPTIONAL)</Text>
+                <View style={styles.inputWithIcon}>
+                  <CreditCard size={16} color="#71717A" strokeWidth={2} style={{ marginRight: 8 }} />
+                  <TextInput
+                    style={styles.textInput}
+                    value={accountNumber}
+                    onChangeText={setAccountNumber}
+                    placeholder="Account / Wallet number"
+                    placeholderTextColor="#A1A1AA"
+                    keyboardType="phone-pad"
+                  />
+                </View>
+              </View>
+
+              {/* Get Started Button */}
+              <TactilePressable
+                style={styles.startBtn}
+                haptic="success"
+                scaleTo={0.97}
+                onPress={handleStart}
+              >
+                <Text style={styles.startBtnText}>Get Started</Text>
+                <ArrowRight size={17} color="#FFFFFF" strokeWidth={2.5} style={{ marginLeft: 6 }} />
+              </TactilePressable>
+
+              {/* Quick Demo Fill Button */}
+              <TactilePressable
+                style={styles.demoFillBtn}
+                haptic="selection"
+                scaleTo={0.97}
+                onPress={handleQuickDemoFill}
+              >
+                <Zap size={14} color="#71717A" strokeWidth={2} style={{ marginRight: 6 }} />
+                <Text style={styles.demoFillBtnText}>Quick Fill Demo Profile</Text>
+              </TactilePressable>
+
+              {/* Switch to Sign In */}
+              <TactilePressable
+                style={styles.switchModeLink}
+                scaleTo={0.97}
+                onPress={() => setAuthMode('signin')}
+              >
+                <Text style={styles.switchModeText}>
+                  Already have an account? <Text style={{ fontWeight: '800', color: '#000000' }}>Sign In</Text>
+                </Text>
+              </TactilePressable>
             </View>
-          </View>
+          )}
 
-          {/* Payment Account Number */}
-          <View style={styles.formGroup}>
-            <Text style={styles.formLabel}>PAYMENT ACCOUNT NUMBER (OPTIONAL)</Text>
-            <View style={styles.inputWithIcon}>
-              <CreditCard size={16} color="#71717A" strokeWidth={2} style={{ marginRight: 8 }} />
-              <TextInput
-                style={styles.textInput}
-                value={accountNumber}
-                onChangeText={setAccountNumber}
-                placeholder="Account / Wallet number"
-                placeholderTextColor="#A1A1AA"
-                keyboardType="phone-pad"
-              />
-            </View>
-          </View>
-
-          {/* Get Started Button */}
-          <TactilePressable
-            style={styles.startBtn}
-            haptic="success"
-            scaleTo={0.97}
-            onPress={handleStart}
-          >
-            <Text style={styles.startBtnText}>Get Started</Text>
-            <ArrowRight size={17} color="#FFFFFF" strokeWidth={2.5} style={{ marginLeft: 6 }} />
-          </TactilePressable>
-
-          {/* Quick Demo Fill Button */}
-          <TactilePressable
-            style={styles.demoFillBtn}
-            haptic="selection"
-            scaleTo={0.97}
-            onPress={handleQuickDemoFill}
-          >
-            <Zap size={14} color="#71717A" strokeWidth={2} style={{ marginRight: 6 }} />
-            <Text style={styles.demoFillBtnText}>Quick Fill Demo Profile</Text>
-          </TactilePressable>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -321,6 +497,48 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14.5,
     fontWeight: '700',
+  },
+  tabSwitcher: {
+    flexDirection: 'row',
+    backgroundColor: '#E4E4E7',
+    borderRadius: 14,
+    padding: 4,
+    marginBottom: 16,
+  },
+  tabBtn: {
+    flex: 1,
+    paddingVertical: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 11,
+  },
+  tabBtnActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  tabBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#71717A',
+  },
+  tabBtnTextActive: {
+    color: '#000000',
+    fontWeight: '800',
+  },
+  switchModeLink: {
+    marginTop: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6,
+  },
+  switchModeText: {
+    fontSize: 13,
+    color: '#71717A',
+    fontWeight: '500',
   },
   demoFillBtn: {
     backgroundColor: '#E4E4E7',

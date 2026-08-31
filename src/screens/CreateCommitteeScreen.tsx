@@ -39,7 +39,7 @@ const DEADLINE_OPTIONS: DropdownOption[] = [
 ];
 
 export const CreateCommitteeScreen: React.FC<CreateCommitteeScreenProps> = ({ onBack, onCreated, onOpenProfile }) => {
-  const [name, setName] = useState('Summer Vacation Fund');
+  const [name, setName] = useState('');
   const [memberCount, setMemberCount] = useState(4);
   const [contribution, setContribution] = useState('250');
   const [duration, setDuration] = useState('12');

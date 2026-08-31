@@ -75,14 +75,15 @@ export default function App() {
     });
 
     nativeStorageService.init().then(async () => {
-      const user = await nativeStorageService.getUser();
-      setCurrentUser(user);
+      // Start on Onboarding / Sign In screen on app launch
       setIsReady(true);
     });
 
     const unsubStorage = nativeStorageService.subscribe(async () => {
       const user = await nativeStorageService.getUser();
-      setCurrentUser(user);
+      if (user) {
+        setCurrentUser(user);
+      }
     });
 
     const handleUrl = async (url: string | null) => {

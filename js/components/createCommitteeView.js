@@ -9,7 +9,7 @@ export function renderCreateCommitteeView(container, { onBack, onCreated, showTo
   let createdCommittee = null;
 
   let formData = {
-    name: 'Summer Vacation Fund',
+    name: '',
     members: 4,
     contribution: 250,
     frequency: 'monthly',
