@@ -436,9 +436,9 @@ const styles = StyleSheet.create({
   },
   floatingDockContainer: {
     position: 'absolute',
-    bottom: 12,
-    left: 24,
-    right: 24,
+    bottom: Platform.OS === 'ios' ? 2 : 4,
+    left: 20,
+    right: 20,
     zIndex: 100,
   },
   floatingDock: {

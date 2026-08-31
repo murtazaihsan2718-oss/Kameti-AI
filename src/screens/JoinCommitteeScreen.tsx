@@ -73,8 +73,6 @@ export const JoinCommitteeScreen: React.FC<JoinCommitteeScreenProps> = ({
       hasReceivedPayout: false,
     };
 
-    await FirebaseService.joinCommittee(previewCommittee.id, newMember);
-
     const localList = await nativeStorageService.getCommittees();
     const exists = localList.some(c => c.id === previewCommittee.id);
     if (!exists) {
@@ -84,6 +82,11 @@ export const JoinCommitteeScreen: React.FC<JoinCommitteeScreenProps> = ({
       };
       await nativeStorageService.saveCommittees([updatedCommittee, ...localList]);
     }
+
+    // Non-blocking cloud sync
+    FirebaseService.joinCommittee(previewCommittee.id, newMember).catch((cloudErr) => {
+      console.warn('[JoinCommittee] Cloud join warning:', cloudErr);
+    });
 
     Alert.alert('Joined!', `Successfully joined "${previewCommittee.name}"!`);
     onJoined(previewCommittee.id);

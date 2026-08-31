@@ -248,7 +248,13 @@ export function renderCreateCommitteeView(container, { onBack, onCreated, showTo
             storageService.setCommittees(localCommittees);
           }
 
-          await FirebaseService.saveCommittee({
+          // Instant UI transition
+          step = 2;
+          render();
+          showToast('Committee created & saved!');
+
+          // Background sync to Cloud Firestore
+          FirebaseService.saveCommittee({
             id: createdCommittee.id,
             name: createdCommittee.name,
             joinCode: createdCommittee.joinCode,
@@ -265,11 +271,9 @@ export function renderCreateCommitteeView(container, { onBack, onCreated, showTo
             creatorPhone: currentUser ? (currentUser.verifiedPhone || currentUser.phone) : undefined,
             members: [creatorMember],
             payments: [],
+          }).catch(cloudErr => {
+            console.warn('[CreateCommittee Web] Cloud save warning:', cloudErr);
           });
-
-          step = 2;
-          render();
-          showToast('Committee created & saved live!');
         } catch (err) {
           showToast(err.message || 'Error creating committee');
         }

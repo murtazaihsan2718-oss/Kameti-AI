@@ -112,8 +112,11 @@ export const CreateCommitteeScreen: React.FC<CreateCommitteeScreenProps> = ({ on
     try {
       const currentCommittees = await nativeStorageService.getCommittees();
       await nativeStorageService.saveCommittees([newCommittee, ...currentCommittees]);
-      await FirebaseService.saveCommittee(newCommittee);
       setCreatedCommittee(newCommittee);
+      // Asynchronous non-blocking Cloud sync in background
+      FirebaseService.saveCommittee(newCommittee).catch((cloudErr) => {
+        console.warn('[CreateCommittee] Cloud background sync notice:', cloudErr);
+      });
     } catch (err: any) {
       let errMsg = 'Could not create committee.';
       if (err) {
