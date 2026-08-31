@@ -148,8 +148,8 @@ const SUGGESTED_PROMPTS = [
   'What committees am I enrolled in?',
 ];
 
-// Floating dock height (54px) + bottom margin (12px) + breathing room (14px) = 80px
-const DOCK_CLEARANCE_HEIGHT = 80;
+// Floating dock height (54px) + bottom margin (4px) + breathing room (4px) = 62px
+const DOCK_CLEARANCE_HEIGHT = Platform.OS === 'ios' ? 62 : 58;
 
 export const ChatAssistantScreen: React.FC<ChatAssistantScreenProps> = ({
   onBack,
@@ -350,13 +350,13 @@ export const ChatAssistantScreen: React.FC<ChatAssistantScreenProps> = ({
   };
 
   const hasText = inputText.trim().length > 0;
-  const bottomPadding = isKeyboardVisible ? 6 : DOCK_CLEARANCE_HEIGHT;
+  const bottomPadding = isKeyboardVisible ? 10 : DOCK_CLEARANCE_HEIGHT;
 
   return (
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 70 : 0}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 70 : 38}
     >
       {/* Top Header Bar */}
       <View style={styles.header}>
