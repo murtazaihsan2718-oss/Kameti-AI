@@ -1,111 +1,112 @@
-# 📱 Kameti - Mobile Informal Savings Committee Manager
+# Kameti - Mobile Informal Savings Committee Manager
 
 > **Simple, fast, trustworthy, and visually clean mobile application for managing Kameti, Beesi, and ROSCA informal savings committees.**
 
 ---
 
-## 🚀 Live Demo & Judge Evaluation Links
+## Live Demo & Deployment Links
 
 | Resource | Link | Description |
 | :--- | :--- | :--- |
-| 🌐 **Live Web Demo / PWA** | **[https://kameti-ai.web.app](https://kameti-ai.web.app)** | Instant access for judges on Desktop, iPhone, and Android (Installable PWA). |
-| 📲 **Download Android APK** | **[📥 Download Kameti.apk](https://expo.dev/artifacts/eas/4mRXX2xJ7D8-Ete5tRpTyQrKA4Xsqz5W9ShnGF-iDMM.apk)** | Standalone native Android release build (EAS Build SDK 54). |
-| ⚡ **Production Cloud Backend** | **[https://kameti-ai-ten.vercel.app](https://kameti-ai-ten.vercel.app)** | Serverless Google Gemini 2.5 Flash conversational backend. |
+| **Live Web Demo / PWA** | **[https://kameti-ai.web.app](https://kameti-ai.web.app)** | Instant browser access on Desktop, iPhone, and Android (Installable PWA). |
+| **Download Android APK** | **[Download Kameti.apk](https://expo.dev/artifacts/eas/4mRXX2xJ7D8-Ete5tRpTyQrKA4Xsqz5W9ShnGF-iDMM.apk)** | Standalone native Android release build (EAS Build SDK 54). |
+| **Production Cloud Backend** | **[https://kameti-ai-ten.vercel.app](https://kameti-ai-ten.vercel.app)** | Serverless Google Gemini 2.5 Flash conversational backend. |
 
-### 🧪 Quick 60-Second Judge Testing Guide
+### Quick Testing Guide
 1. **Multi-Device Real-time Sync:** Open `https://kameti-ai.web.app` in two separate browser tabs (or on two phones).
 2. **Create & Join:** Create a 2-person committee on Tab 1, copy the 6-character Join Code, and join with Tab 2.
-3. **Live Wheel Spin:** Watch the lucky draw wheel automatically trigger and spin synchronously on both screens the moment capacity is reached!
+3. **Live Wheel Spin:** Watch the lucky draw wheel automatically trigger and spin synchronously on both screens the moment capacity is reached.
 4. **Bilingual AI Assistant:** Tap the **"Ask"** tab at the bottom and ask questions in **Pakistani Roman Urdu** (*"meri bari kab hai?"*, *"mujhe kitne paise dene hain?"*) or **English** (*"Who do I owe this month?"*) to see real-time grounded context in action.
 
 ---
 
-## 🔒 Core Product Principle
+## Core Product Principle
 **This app DOES NOT hold, transfer, process, or manage real money.**
 Users make actual payments themselves through **Easypaisa, JazzCash, SadaPay, NayaPay, Raast, Bank Transfer, or Cash** outside the app. The app tells them who to pay, how much to pay, where to send it, and allows uploading and reviewing payment proof.
 
 ---
 
-## ✨ Features
+## Features
 
-1. **⚡ Fast Onboarding & Authentication**
+1. **Fast Onboarding & Authentication**
    - Under 1-minute onboarding.
    - Phone authentication with OTP verification & resend cooldown.
    - Login phone number stored separately from payment number.
    - Profile setup: Name, Preferred payment method (Easypaisa, JazzCash, SadaPay, etc.), Payment account number.
 
-2. **🏠 Home Screen**
+2. **Home Screen**
    - Personalized time-of-day greeting ("Good morning, Aown").
    - Two prominent primary actions: `[ + Create Committee ]` and `[ Join Committee ]`.
    - Clean committee cards displaying monthly contribution, member count, current recipient, deadline, and real-time status badge (● On track, ● Due soon, ● Overdue).
    - Friendly empty state for first-time users.
 
-3. **➕ Create Committee**
+3. **Create Committee**
    - Setup wizard: Name, Member count, Contribution amount, Frequency (monthly/custom), Start date, Recipient selection mode (**Random** or **Voting**).
    - Real-time monthly pool calculator (`5 members × Rs. 20,000 = Rs. 100,000`).
    - Summary confirmation screen.
    - Automatic generation of unique 6-character invitation code and shareable join links.
 
-4. **🔗 Join Committee**
-   - Direct join links (`https://yourapp/?join=ABC123`) and invitation code input.
+4. **Join Committee**
+   - Direct join links and 6-character invitation code input.
    - Full invitation details preview.
    - Duplicate membership guards & capacity limit checks.
 
-5. **⭕ Signature Committee Circle Room**
+5. **Signature Committee Circle Room**
    - Visual circular arrangement of member avatars around an active status core.
    - Status indicators:
-     - 👑 **Gold Crown & Glow**: Monthly recipient.
-     - ⏳ **Pending Ring**: Contribution proof pending.
-     - ✓ **Emerald Ring**: Payment proof submitted.
+     - Gold Crown: Monthly recipient.
+     - Pending Ring: Contribution proof pending.
+     - Emerald Ring: Payment proof submitted.
    - Tap any avatar to view that member's payment details (restricted to committee members).
-   - Prominent `[ PAY Rs. 20,000 ]` hero button for pending payments.
+   - Prominent `[ PAY Rs. 20,000 ]` button for pending payments.
 
-6. **🎲 Deterministic Recipient Selection**
+6. **Deterministic Recipient Selection**
    - **Mode A: Random**: Smoothly animated spinning wheel that rotates, slows down, and lands deterministically on the eligible member. Locks permanently per cycle.
    - **Mode B: Voting**: Real-time voting room with live vote counts, candidate progress bars, active countdown timer, and automatic fair tie-breaker resolution.
 
-7. **💳 Payment Instructions & Proof Uploads**
+7. **Payment Instructions & Proof Uploads**
    - Recipient details, payment method, and account number.
-   - `[ Copy Number ]`, `[ Copy Amount ]`, and `[ Open Payment App ]` deep links.
+   - Deep links for copying account details and launching payment apps.
    - Photo/receipt upload from camera, gallery, or drag-and-drop.
    - In-app proof viewer for committee members.
    - Replace or remove proof before cycle closure.
 
-8. **⏰ Automated Reminders & Natural Language Deadlines**
+8. **Automated Reminders & Natural Language Deadlines**
    - Natural deadlines: *"Payment due in 2 days"*, *"Payment due today"*, *"1 day late"*.
    - Automated notifications (3 days before, 1 day before, due date, late alert, proof submitted confirmation, recipient payout alert).
 
-9. **📜 Committee History**
+9. **Committee History**
    - Month-by-month historical schedule with pool totals, recipient records, and completed payment counters.
 
-10. **🎙️ Multilingual Voice & AI Assistant**
-    - Accessible via floating glowing microphone action.
-    - Full speech recognition (speech-to-text) and speech synthesis (text-to-speech) in **English**, **Urdu (اردو)**, and **Roman Urdu** (*"meri committee ki bari kab hai?"*, *"how much do I owe this month?"*, *"who hasn't submitted proof?"*).
-    - Safe application tools layer (`getMyCommittees`, `getCurrentRecipient`, `getMyPendingPayments`, `getMyUpcomingPayout`, `getPendingMembers`).
+10. **Multilingual Voice & AI Assistant**
+    - Accessible via floating microphone action.
+    - Full speech recognition and speech synthesis in **English**, **Urdu (اردو)**, and **Pakistani Roman Urdu** (*"meri committee ki bari kab hai?"*, *"how much do I owe this month?"*, *"who hasn't submitted proof?"*).
+    - Context-grounded application tools layer (`getMyCommittees`, `getCurrentRecipient`, `getMyPendingPayments`, `getMyUpcomingPayout`, `getPendingMembers`).
 
-11. **👤 User Profile & Tracking Statistics**
+11. **User Profile & Tracking Statistics**
     - Account details editor and OTP-secured profile updates.
     - Tracking statistics: Active committees, Completed committees, Total contributions tracked, Total payouts received.
 
 ---
 
-## 🚀 Running the App Locally
+## Running the App Locally
 
-Start the local server using `agy-node.cmd`:
-
-```powershell
-& agy-node.cmd server.js
+### 1. Mobile App (React Native / Expo)
+```bash
+npm install
+npx expo start
 ```
+Scan the terminal QR code using **Expo Go** on Android or iOS.
 
-Open your browser at:
-👉 **`http://localhost:3000`**
-
-To test joining a committee via invitation link:
-👉 **`http://localhost:3000/?join=FRIEND5`**
+### 2. Web App / Local Server
+```bash
+node server.js
+```
+Open your browser at `http://localhost:3000`.
 
 ---
 
-## 🔥 Firebase Setup Instructions (Optional for Live Production)
+## Firebase Setup Instructions (Optional)
 
 The app works out of the box with zero setup in **Mock/Demo Mode**. To connect your live Firebase project:
 
@@ -134,7 +135,7 @@ The app works out of the box with zero setup in **Mock/Demo Mode**. To connect y
 
 ---
 
-## 📂 Project Architecture
+## Project Architecture
 
 ```
 kameti-mobile-app/
