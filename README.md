@@ -4,6 +4,22 @@
 
 ---
 
+## 🚀 Live Demo & Judge Evaluation Links
+
+| Resource | Link | Description |
+| :--- | :--- | :--- |
+| 🌐 **Live Web Demo / PWA** | **[https://kameti-ai.web.app](https://kameti-ai.web.app)** | Instant access for judges on Desktop, iPhone, and Android (Installable PWA). |
+| 📲 **Download Android APK** | **[📥 Download Kameti.apk](https://expo.dev/artifacts/eas/4mRXX2xJ7D8-Ete5tRpTyQrKA4Xsqz5W9ShnGF-iDMM.apk)** | Standalone native Android release build (EAS Build SDK 54). |
+| ⚡ **Production Cloud Backend** | **[https://kameti-ai-ten.vercel.app](https://kameti-ai-ten.vercel.app)** | Serverless Google Gemini 2.5 Flash conversational backend. |
+
+### 🧪 Quick 60-Second Judge Testing Guide
+1. **Multi-Device Real-time Sync:** Open `https://kameti-ai.web.app` in two separate browser tabs (or on two phones).
+2. **Create & Join:** Create a 2-person committee on Tab 1, copy the 6-character Join Code, and join with Tab 2.
+3. **Live Wheel Spin:** Watch the lucky draw wheel automatically trigger and spin synchronously on both screens the moment capacity is reached!
+4. **Bilingual AI Assistant:** Tap the **"Ask"** tab at the bottom and ask questions in **Pakistani Roman Urdu** (*"meri bari kab hai?"*, *"mujhe kitne paise dene hain?"*) or **English** (*"Who do I owe this month?"*) to see real-time grounded context in action.
+
+---
+
 ## 🔒 Core Product Principle
 **This app DOES NOT hold, transfer, process, or manage real money.**
 Users make actual payments themselves through **Easypaisa, JazzCash, SadaPay, NayaPay, Raast, Bank Transfer, or Cash** outside the app. The app tells them who to pay, how much to pay, where to send it, and allows uploading and reviewing payment proof.
