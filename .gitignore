@@ -3,8 +3,14 @@ node_modules/
 .firebase/
 dist/
 web-build/
+
+# Environment variables & secrets
 .env
 .env.*
+*.env
 functions/.env
+!.env.example
+
 .DS_Store
 *.log
+
