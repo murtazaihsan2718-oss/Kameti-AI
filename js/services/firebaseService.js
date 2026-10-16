@@ -675,3 +675,10 @@ export class FirebaseService {
     }
   }
 }
+
+if (typeof window !== 'undefined') {
+  window.FirebaseService = FirebaseService;
+}
+if (typeof globalThis !== 'undefined') {
+  globalThis.FirebaseService = FirebaseService;
+}

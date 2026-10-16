@@ -1,18 +1,28 @@
 // Kameti App Entry Point & Router - Matching Reference Designs 1-to-1
 
-import { authService } from './services/authService.js';
-import { notificationService } from './services/notificationService.js';
-import { storageService } from './services/storageService.js';
+import { authService } from './services/authService.js?v=11.0.1';
+import { notificationService } from './services/notificationService.js?v=11.0.1';
+import { storageService } from './services/storageService.js?v=11.0.1';
+import { committeeService } from './services/committeeService.js?v=11.0.1';
+import { FirebaseService } from './services/firebaseService.js?v=11.0.1';
 
-import { renderOnboardingView } from './components/onboardingView.js';
-import { renderHomeView } from './components/homeView.js';
-import { renderCreateCommitteeView } from './components/createCommitteeView.js?v=10.0.2';
-import { renderJoinCommitteeView } from './components/joinCommitteeView.js';
-import { renderCommitteeRoomView } from './components/committeeRoomView.js?v=10.0.2';
-import { renderHistoryView } from './components/historyView.js';
-import { renderNotificationsView } from './components/notificationsView.js';
-import { renderProfileView } from './components/profileView.js';
-import { openVoiceAssistantModal, resetVoiceAssistantSession } from './components/voiceAssistantModal.js?v=10.0.2';
+if (typeof window !== 'undefined') {
+  window.storageService = storageService;
+  window.authService = authService;
+  window.committeeService = committeeService;
+  window.notificationService = notificationService;
+  window.FirebaseService = FirebaseService;
+}
+
+import { renderOnboardingView } from './components/onboardingView.js?v=11.0.1';
+import { renderHomeView } from './components/homeView.js?v=11.0.1';
+import { renderCreateCommitteeView } from './components/createCommitteeView.js?v=11.0.1';
+import { renderJoinCommitteeView } from './components/joinCommitteeView.js?v=11.0.1';
+import { renderCommitteeRoomView } from './components/committeeRoomView.js?v=11.0.1';
+import { renderHistoryView } from './components/historyView.js?v=11.0.1';
+import { renderNotificationsView } from './components/notificationsView.js?v=11.0.1';
+import { renderProfileView } from './components/profileView.js?v=11.0.1';
+import { openVoiceAssistantModal, resetVoiceAssistantSession } from './components/voiceAssistantModal.js?v=11.0.1';
 
 class KametiApp {
   constructor() {

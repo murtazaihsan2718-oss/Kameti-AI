@@ -38,7 +38,8 @@
       "package": "com.kameti.mobile",
       "softInputMode": "adjustResize",
       "permissions": [
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
       ]
     },
     "plugins": [
@@ -51,6 +52,11 @@
     ],
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "6a54c334-140a-4cb0-940d-699980e5a36a"
+      }
     }
   }
 }

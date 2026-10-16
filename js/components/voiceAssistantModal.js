@@ -1,6 +1,6 @@
 // Modern Kameti AI Chat & Voice Assistant Screen
 
-import { voiceAssistantService } from '../services/voiceAssistantService.js?v=10.0.2';
+import { voiceAssistantService } from '../services/voiceAssistantService.js?v=11.0.1';
 import { authService } from '../services/authService.js';
 
 const INITIAL_ASSISTANT_MESSAGES = [

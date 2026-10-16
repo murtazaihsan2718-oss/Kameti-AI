@@ -297,3 +297,10 @@ class CommitteeService {
 }
 
 export const committeeService = new CommitteeService();
+
+if (typeof window !== 'undefined') {
+  window.committeeService = committeeService;
+}
+if (typeof globalThis !== 'undefined') {
+  globalThis.committeeService = committeeService;
+}

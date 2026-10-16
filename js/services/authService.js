@@ -191,3 +191,10 @@ class AuthService {
 }
 
 export const authService = new AuthService();
+
+if (typeof window !== 'undefined') {
+  window.authService = authService;
+}
+if (typeof globalThis !== 'undefined') {
+  globalThis.authService = authService;
+}

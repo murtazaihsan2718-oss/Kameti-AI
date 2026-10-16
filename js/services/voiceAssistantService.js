@@ -1,6 +1,6 @@
 import { storageService } from './storageService.js';
 import { authService } from './authService.js';
-import { buildAssistantContext } from './assistantContext.js?v=10.0.2';
+import { buildAssistantContext } from './assistantContext.js?v=11.0.1';
 
 class VoiceAssistantService {
   async processQuery(query, conversationHistory = []) {
