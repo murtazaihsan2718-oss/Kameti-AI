@@ -1,5 +1,5 @@
 // Service Worker for Kameti Web App (Always network-first live sync)
-const CACHE_NAME = 'kameti-cache-v10-fresh';
+const CACHE_NAME = 'kameti-cache-v11-purge';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();

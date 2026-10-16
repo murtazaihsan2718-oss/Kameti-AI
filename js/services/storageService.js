@@ -376,3 +376,10 @@ class StorageService {
 }
 
 export const storageService = new StorageService();
+
+if (typeof window !== 'undefined') {
+  window.storageService = storageService;
+}
+if (typeof globalThis !== 'undefined') {
+  globalThis.storageService = storageService;
+}

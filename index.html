@@ -13,7 +13,7 @@
   <meta name="apple-mobile-web-app-title" content="Kameti AI" />
   
   <!-- CSS Stylesheet -->
-  <link rel="stylesheet" href="/css/styles.css?v=10.0.0" />
+  <link rel="stylesheet" href="/css/styles.css?v=11.0.0" />
 </head>
 <body>
 
@@ -66,14 +66,26 @@
         }
       });
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js?v=10.0.0').catch(err => {
+        navigator.serviceWorker.register('/sw.js?v=11.0.0').catch(err => {
           console.log('[SW] Service Worker note:', err);
         });
       });
     }
   </script>
 
+  <!-- Pre-load and globally bind core services to guarantee resolution across all cached modules -->
+  <script type="module">
+    import { storageService } from '/js/services/storageService.js?v=11.0.0';
+    import { authService } from '/js/services/authService.js?v=11.0.0';
+    import { committeeService } from '/js/services/committeeService.js?v=11.0.0';
+    import { FirebaseService } from '/js/services/firebaseService.js?v=11.0.0';
+    window.storageService = storageService;
+    window.authService = authService;
+    window.committeeService = committeeService;
+    window.FirebaseService = FirebaseService;
+  </script>
+
   <!-- Main ES Module Entry Point -->
-  <script type="module" src="/js/app.js?v=10.0.0"></script>
+  <script type="module" src="/js/app.js?v=11.0.0"></script>
 </body>
 </html>

@@ -1,9 +1,9 @@
 // Create Committee View Component - 100% SVG Line Icons, Zero Emojis (Matching Image 3 & 4 1-to-1)
 
-import { committeeService } from '../services/committeeService.js';
-import { storageService } from '../services/storageService.js';
-import { FirebaseService } from '../services/firebaseService.js';
-import { formatCurrency, SelectionMethods } from '../models/dataModels.js';
+import { committeeService } from '../services/committeeService.js?v=11.0.0';
+import { storageService } from '../services/storageService.js?v=11.0.0';
+import { FirebaseService } from '../services/firebaseService.js?v=11.0.0';
+import { formatCurrency, SelectionMethods } from '../models/dataModels.js?v=11.0.0';
 
 export function renderCreateCommitteeView(container, { onBack, onCreated, showToast }) {
   let step = 1;
@@ -218,7 +218,15 @@ export function renderCreateCommitteeView(container, { onBack, onCreated, showTo
         }
 
         try {
-          createdCommittee = committeeService.createCommittee({
+          const comService = (typeof committeeService !== 'undefined' ? committeeService : null) || (typeof window !== 'undefined' ? window.committeeService : null);
+          const storage = (typeof storageService !== 'undefined' ? storageService : null) || (typeof window !== 'undefined' ? window.storageService : null);
+          const fbService = (typeof FirebaseService !== 'undefined' ? FirebaseService : null) || (typeof window !== 'undefined' ? window.FirebaseService : null);
+
+          if (!comService) {
+            throw new Error('Committee service initializing, please try again in a moment');
+          }
+
+          createdCommittee = comService.createCommittee({
             name: nameVal,
             numberOfMembers: formData.members,
             contributionAmount: contribVal,
@@ -227,7 +235,7 @@ export function renderCreateCommitteeView(container, { onBack, onCreated, showTo
             recipientSelectionMethod: formData.selectionMethod
           });
 
-          const currentUser = storageService.getCurrentUser();
+          const currentUser = storage ? storage.getCurrentUser() : null;
           const creatorMember = {
             id: currentUser ? currentUser.id : ('m_' + Date.now().toString(36)),
             name: currentUser ? currentUser.name : 'Committee Creator',
@@ -240,13 +248,15 @@ export function renderCreateCommitteeView(container, { onBack, onCreated, showTo
           };
 
           // Attach creator member to local committee object as well
-          const localCommittees = storageService.getCommittees();
-          const foundIdx = localCommittees.findIndex(c => c.id === createdCommittee.id);
-          if (foundIdx >= 0) {
-            localCommittees[foundIdx].creatorId = currentUser ? currentUser.id : undefined;
-            localCommittees[foundIdx].creatorPhone = currentUser ? (currentUser.verifiedPhone || currentUser.phone) : undefined;
-            localCommittees[foundIdx].members = [creatorMember];
-            storageService.setCommittees(localCommittees);
+          if (storage) {
+            const localCommittees = storage.getCommittees() || [];
+            const foundIdx = localCommittees.findIndex(c => c.id === createdCommittee.id);
+            if (foundIdx >= 0) {
+              localCommittees[foundIdx].creatorId = currentUser ? currentUser.id : undefined;
+              localCommittees[foundIdx].creatorPhone = currentUser ? (currentUser.verifiedPhone || currentUser.phone) : undefined;
+              localCommittees[foundIdx].members = [creatorMember];
+              storage.setCommittees(localCommittees);
+            }
           }
 
           // Instant UI transition
@@ -255,26 +265,28 @@ export function renderCreateCommitteeView(container, { onBack, onCreated, showTo
           showToast('Committee created & saved!');
 
           // Background sync to Cloud Firestore
-          FirebaseService.saveCommittee({
-            id: createdCommittee.id,
-            name: createdCommittee.name,
-            joinCode: createdCommittee.joinCode,
-            contributionAmount: createdCommittee.contributionAmount,
-            numberOfMembers: createdCommittee.numberOfMembers,
-            memberCount: 1,
-            totalCycles: createdCommittee.duration,
-            currentCycle: 1,
-            frequency: createdCommittee.frequency,
-            startDate: createdCommittee.startDate,
-            selectionMode: createdCommittee.recipientSelectionMethod,
-            status: createdCommittee.status,
-            creatorId: currentUser ? currentUser.id : undefined,
-            creatorPhone: currentUser ? (currentUser.verifiedPhone || currentUser.phone) : undefined,
-            members: [creatorMember],
-            payments: [],
-          }).catch(cloudErr => {
-            console.warn('[CreateCommittee Web] Cloud save warning:', cloudErr);
-          });
+          if (fbService && fbService.saveCommittee) {
+            fbService.saveCommittee({
+              id: createdCommittee.id,
+              name: createdCommittee.name,
+              joinCode: createdCommittee.joinCode,
+              contributionAmount: createdCommittee.contributionAmount,
+              numberOfMembers: createdCommittee.numberOfMembers,
+              memberCount: 1,
+              totalCycles: createdCommittee.duration,
+              currentCycle: 1,
+              frequency: createdCommittee.frequency,
+              startDate: createdCommittee.startDate,
+              selectionMode: createdCommittee.recipientSelectionMethod,
+              status: createdCommittee.status,
+              creatorId: currentUser ? currentUser.id : undefined,
+              creatorPhone: currentUser ? (currentUser.verifiedPhone || currentUser.phone) : undefined,
+              members: [creatorMember],
+              payments: [],
+            }).catch(cloudErr => {
+              console.warn('[CreateCommittee Web] Cloud save warning:', cloudErr);
+            });
+          }
         } catch (err) {
           showToast(err.message || 'Error creating committee');
         }
