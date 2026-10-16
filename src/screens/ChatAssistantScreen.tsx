@@ -9,6 +9,7 @@ import {
   Platform,
   Keyboard,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { ArrowLeft, User, Mic, ArrowUp, Volume2, VolumeX } from 'lucide-react-native';
 import { TactilePressable } from '../components/TactilePressable';
@@ -238,9 +239,11 @@ export const ChatAssistantScreen: React.FC<ChatAssistantScreenProps> = ({
               await handleSendMessage(spokenQuery);
             } else if (sttResult && !sttResult.success && sttResult.error) {
               console.warn('[Voice] Transcription notice:', sttResult.error);
+              Alert.alert('Voice input', sttResult.error);
             }
           } catch (transcribeErr) {
             console.error('[Voice] Transcription request failed:', transcribeErr);
+            Alert.alert('Voice input', 'Could not transcribe your recording. Please try again or type your question.');
           } finally {
             setIsTranscribing(false);
           }

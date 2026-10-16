@@ -227,7 +227,7 @@ export function openVoiceAssistantModal({ onBack, onOpenProfile, showToast } = {
       micBtn.addEventListener('click', () => {
         isListening = !isListening;
         if (isListening) {
-          if (showToast) showToast('Listening in Urdu & English...');
+          if (showToast) showToast('Listening...');
           if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             const recognition = new SpeechRecognition();
@@ -249,11 +249,8 @@ export function openVoiceAssistantModal({ onBack, onOpenProfile, showToast } = {
             };
             recognition.start();
           } else {
-            // Fallback simulation
-            setTimeout(() => {
-              isListening = false;
-              handleSend('How much do I owe this month?');
-            }, 2000);
+            isListening = false;
+            if (showToast) showToast('Voice input is unavailable in this browser. Please type your question.');
           }
         }
         render();
