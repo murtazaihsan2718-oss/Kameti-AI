@@ -6,7 +6,7 @@ import { authService } from '../services/authService.js';
 import { storageService } from '../services/storageService.js';
 import { FirebaseService } from '../services/firebaseService.js';
 import { renderCommitteeCircle } from './committeeCircle.js';
-import { openPaymentProofModal } from './paymentProofModal.js';
+import { openPaymentProofModal } from './paymentProofModal.js?v=10.0.1';
 import { formatCurrency, PaymentStatus } from '../models/dataModels.js';
 
 export function renderCommitteeRoomView(container, {

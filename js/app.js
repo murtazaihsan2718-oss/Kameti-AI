@@ -6,13 +6,13 @@ import { storageService } from './services/storageService.js';
 
 import { renderOnboardingView } from './components/onboardingView.js';
 import { renderHomeView } from './components/homeView.js';
-import { renderCreateCommitteeView } from './components/createCommitteeView.js';
+import { renderCreateCommitteeView } from './components/createCommitteeView.js?v=10.0.2';
 import { renderJoinCommitteeView } from './components/joinCommitteeView.js';
-import { renderCommitteeRoomView } from './components/committeeRoomView.js';
+import { renderCommitteeRoomView } from './components/committeeRoomView.js?v=10.0.2';
 import { renderHistoryView } from './components/historyView.js';
 import { renderNotificationsView } from './components/notificationsView.js';
 import { renderProfileView } from './components/profileView.js';
-import { openVoiceAssistantModal, resetVoiceAssistantSession } from './components/voiceAssistantModal.js';
+import { openVoiceAssistantModal, resetVoiceAssistantSession } from './components/voiceAssistantModal.js?v=10.0.2';
 
 class KametiApp {
   constructor() {

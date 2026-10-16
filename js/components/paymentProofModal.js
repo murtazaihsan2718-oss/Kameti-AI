@@ -1,6 +1,7 @@
 // Payment Proof Upload Modal Component - 100% SVG Line Icons, Zero Emojis (Matching Image 3 & 4 1-to-1)
 
 import { paymentService } from '../services/paymentService.js';
+import { storageService } from '../services/storageService.js';
 import { authService } from '../services/authService.js';
 import { FirebaseService } from '../services/firebaseService.js';
 

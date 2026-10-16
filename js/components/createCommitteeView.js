@@ -1,6 +1,7 @@
 // Create Committee View Component - 100% SVG Line Icons, Zero Emojis (Matching Image 3 & 4 1-to-1)
 
 import { committeeService } from '../services/committeeService.js';
+import { storageService } from '../services/storageService.js';
 import { FirebaseService } from '../services/firebaseService.js';
 import { formatCurrency, SelectionMethods } from '../models/dataModels.js';
 

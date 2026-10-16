@@ -1,6 +1,6 @@
 // Modern Kameti AI Chat & Voice Assistant Screen
 
-import { voiceAssistantService } from '../services/voiceAssistantService.js';
+import { voiceAssistantService } from '../services/voiceAssistantService.js?v=10.0.2';
 import { authService } from '../services/authService.js';
 
 const INITIAL_ASSISTANT_MESSAGES = [
@@ -32,6 +32,7 @@ export function openVoiceAssistantModal({ onBack, onOpenProfile, showToast } = {
   let messages = sessionMessages;
 
   let isListening = false;
+  let isSending = false;
   let activeSpeakingId = null;
 
   function parseMarkdown(text) {
@@ -52,35 +53,26 @@ export function openVoiceAssistantModal({ onBack, onOpenProfile, showToast } = {
     return html;
   }
 
-  function handleSend(userText) {
+  async function handleSend(userText) {
     const text = (userText || '').trim();
-    if (!text) return;
-
-    const userMsgId = 'msg_' + Date.now();
-    messages.push({
-      id: userMsgId,
-      sender: 'user',
-      text,
-    });
-
+    if (!text || isSending) return;
+    const history = messages.filter(m => m.id !== 'msg_welcome' && !m.error);
+    messages.push({ id: 'msg_' + Date.now(), sender: 'user', text });
+    isSending = true;
     render();
     scrollToBottom();
-
-    setTimeout(() => {
-      const res = voiceAssistantService.processQuery(text);
-      const replyText = res.reply || res.textResponse || 'I am here to help you manage your committees!';
-      const aiMsgId = 'msg_' + (Date.now() + 1);
-
-      messages.push({
-        id: aiMsgId,
-        sender: 'assistant',
-        text: replyText,
-        language: res.language || 'en',
-      });
-
-      render();
-      scrollToBottom();
-    }, 400);
+    try {
+      const result = await voiceAssistantService.processQuery(text, history);
+      messages.push({ id: 'msg_' + Date.now(), sender: 'assistant', text: result.reply,
+        language: result.language, source: result.source, model: result.model });
+    } catch (error) {
+      messages.push({ id: 'msg_' + Date.now(), sender: 'assistant',
+        text: error.message || 'Could not reach the AI assistant. Please try again.', error: true, source: 'unavailable' });
+    } finally {
+      isSending = false;
+      // Do not replace Home/Profile if the user navigated away during the request.
+      if (container.querySelector('#voice-chat-form')) { render(); scrollToBottom(); }
+    }
   }
 
   function scrollToBottom() {
@@ -119,7 +111,7 @@ export function openVoiceAssistantModal({ onBack, onOpenProfile, showToast } = {
             } else {
               const isPlaying = activeSpeakingId === msg.id;
               return `
-                <div style="align-self: flex-start; max-width: 88%; background-color: #000000; color: #FFFFFF; padding: 14px 16px; border-radius: 20px; font-size: 14px; font-weight: 400; line-height: 1.5; word-break: break-word;">
+                <div data-ai-source="${msg.source === 'gemini' ? 'gemini' : msg.error ? 'unavailable' : 'welcome'}" style="align-self: flex-start; max-width: 88%; background-color: #000000; color: #FFFFFF; padding: 14px 16px; border-radius: 20px; font-size: 14px; font-weight: 400; line-height: 1.5; word-break: break-word;">
                   <div>${parseMarkdown(msg.text)}</div>
                   <div style="display: flex; justify-content: flex-end; margin-top: 8px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.1);">
                     <button class="btn-listen-msg" data-id="${msg.id}" data-text="${encodeURIComponent(msg.text)}" data-lang="${msg.language || 'en'}" style="background: rgba(255,255,255,0.1); border: none; border-radius: 12px; padding: 3px 8px; color: ${isPlaying ? '#60A5FA' : '#9CA3AF'}; font-size: 11px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px;">
@@ -131,12 +123,13 @@ export function openVoiceAssistantModal({ onBack, onOpenProfile, showToast } = {
               `;
             }
           }).join('')}
+          ${isSending ? '<div role="status" style="font-size: 13px; color: #71717A; padding: 8px;">Kameti AI is thinking…</div>' : ''}
         </div>
 
         <!-- Horizontal Suggested Prompt Chips -->
         <div style="flex-shrink: 0; margin-bottom: 8px; overflow-x: auto; white-space: nowrap; padding-bottom: 4px; display: flex; gap: 8px;">
           ${SUGGESTED_PROMPTS.map(p => `
-            <button class="btn-suggestion-chip" data-prompt="${p}" style="display: inline-block; background-color: #F4F4F5; border: 1px solid #E4E4E7; border-radius: 9999px; padding: 7px 14px; font-size: 12px; font-weight: 600; color: #27272A; cursor: pointer; flex-shrink: 0;">
+            <button ${isSending ? 'disabled' : ''} class="btn-suggestion-chip" data-prompt="${p}" style="display: inline-block; background-color: #F4F4F5; border: 1px solid #E4E4E7; border-radius: 9999px; padding: 7px 14px; font-size: 12px; font-weight: 600; color: #27272A; cursor: pointer; flex-shrink: 0;">
               ${p}
             </button>
           `).join('')}
@@ -153,7 +146,7 @@ export function openVoiceAssistantModal({ onBack, onOpenProfile, showToast } = {
             </button>
 
             <!-- Send Button -->
-            <button type="submit" style="width: 32px; height: 32px; border-radius: 50%; background-color: #000000; border: none; color: #FFFFFF; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+            <button type="submit" aria-label="Send message" ${isSending ? 'disabled' : ''} style="width: 32px; height: 32px; border-radius: 50%; background-color: #000000; border: none; color: #FFFFFF; display: flex; align-items: center; justify-content: center; cursor: pointer;">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.6"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>
             </button>
           </form>
@@ -227,6 +220,7 @@ export function openVoiceAssistantModal({ onBack, onOpenProfile, showToast } = {
       micBtn.addEventListener('click', () => {
         isListening = !isListening;
         if (isListening) {
+          if (isSending) { isListening = false; return; }
           if (showToast) showToast('Listening...');
           if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;

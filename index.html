@@ -13,7 +13,7 @@
   <meta name="apple-mobile-web-app-title" content="Kameti AI" />
   
   <!-- CSS Stylesheet -->
-  <link rel="stylesheet" href="/css/styles.css?v=10.0.0" />
+  <link rel="stylesheet" href="/css/styles.css?v=10.0.2" />
 </head>
 <body>
 
@@ -66,7 +66,7 @@
         }
       });
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js?v=10.0.0').catch(err => {
+        navigator.serviceWorker.register('/sw.js?v=10.0.2', { updateViaCache: 'none' }).catch(err => {
           console.log('[SW] Service Worker note:', err);
         });
       });
@@ -74,6 +74,6 @@
   </script>
 
   <!-- Main ES Module Entry Point -->
-  <script type="module" src="/js/app.js?v=10.0.0"></script>
+  <script type="module" src="/js/app.js?v=10.0.2"></script>
 </body>
 </html>
