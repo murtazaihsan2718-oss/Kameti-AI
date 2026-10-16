@@ -375,84 +375,33 @@ async function handleChatWithAssistant(req, res) {
 }
 
 async function handleTranscribeAudio(req, res) {
-  let body = '';
-  const MAX_AUDIO_PAYLOAD = 15 * 1024 * 1024; // 15MB limit
+  // Share transcription with the serverless route so both deployment layouts
+  // use the same model, audio validation, timeout and error handling.
+  const transcribeAudio = require('./api/transcribeAudio');
+  const response = {
+    setHeader: (name, value) => res.setHeader(name, value),
+    status(code) { res.statusCode = code; return this; },
+    json(body) {
+      res.setHeader('Content-Type', 'application/json');
+      return res.end(JSON.stringify(body));
+    },
+    end: () => res.end(),
+  };
+  if (req.body !== undefined) return transcribeAudio(req, response);
 
-  req.on('data', chunk => {
-    body += chunk.toString();
-    if (body.length > MAX_AUDIO_PAYLOAD) {
-      req.destroy();
+  try {
+    let body = '';
+    for await (const chunk of req) {
+      body += chunk.toString();
+      if (Buffer.byteLength(body) > 4.5 * 1024 * 1024) {
+        return response.status(413).json({ success: false, error: 'Recording is too large. Please record a shorter question.' });
+      }
     }
-  });
-
-  req.on('end', async () => {
-    try {
-      const parsed = JSON.parse(body || '{}');
-      const { audioBase64, mimeType } = parsed;
-
-      if (!audioBase64 || typeof audioBase64 !== 'string' || !audioBase64.trim()) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify({ success: false, error: 'audioBase64 is required and must be a non-empty string.' }));
-      }
-
-      const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-      if (!apiKey) {
-        console.error('[Server Backend] Missing GEMINI_API_KEY for audio transcription.');
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify({ success: false, error: 'Server configuration error: missing API key.' }));
-      }
-
-      const cleanMimeType = mimeType || 'audio/mp4';
-      const cleanData = audioBase64.replace(/^data:audio\/[a-zA-Z0-9]+;base64,/, '').trim();
-
-      const requestPayload = {
-        contents: [
-          {
-            role: 'user',
-            parts: [
-              {
-                inlineData: {
-                  mimeType: cleanMimeType,
-                  data: cleanData,
-                },
-              },
-              {
-                text: 'Please listen to this audio carefully and transcribe the user\'s spoken words verbatim. The user may speak in English, Urdu script (اردو), or Pakistani Roman Urdu (such as "Meri payment kab due hai?", "Mera payout kab hai?", "Kameti ki kisht kitni hai?", or "Agli turn kiski hai?"). Recognize colloquial Kameti, Committee, Beesi, Kisht, Parchi, and Payout terms accurately. Output ONLY the verbatim transcribed text. Do NOT answer the question. Do NOT add conversational replies, notes, quotation marks, or markdown explanations.',
-              },
-            ],
-          },
-        ],
-        generationConfig: {
-          temperature: 0.1,
-          maxOutputTokens: 500,
-        },
-      };
-
-      console.log(`[Server Backend] Processing audio transcription request (${cleanMimeType}, ~${Math.round(cleanData.length * 0.75 / 1024)} KB)...`);
-      const rawTranscription = await callGeminiWithBackoff(requestPayload, apiKey);
-
-      // Clean up transcription
-      let cleaned = (rawTranscription || '')
-        .trim()
-        .replace(/^["']|["']$/g, '')
-        .replace(/^(Transcription:?\s*)/i, '')
-        .trim();
-
-      // If Gemini returned timestamp or silence artifacts, treat as empty string
-      if (/^(00:00|0:00|\[silence\]|\(silence\)|\.\.\.)$/i.test(cleaned)) {
-        cleaned = '';
-      }
-
-      console.log(`[Server Backend] Audio transcription result: "${cleaned}"`);
-
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({ success: true, text: cleaned }));
-    } catch (err) {
-      console.error('[Server Backend] Audio transcription failed:', err.message);
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({ success: false, error: 'Unable to transcribe audio. Please try again.' }));
-    }
-  });
+    req.body = body || '{}';
+    return transcribeAudio(req, response);
+  } catch (err) {
+    return response.status(400).json({ success: false, error: 'Unable to read the recording.' });
+  }
 }
 
 function splitTextIntoTTSChunks(text, maxLen = 180) {
